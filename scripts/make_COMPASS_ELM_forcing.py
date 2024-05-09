@@ -59,7 +59,8 @@ tide_data_multicell=xarray.Dataset(
 
 for site in grid_points:
     if site.split('_')[0] in ['SERC','Sweethall','Goodwin Island','Moneystump']:
-        tide_data_multicell['tide_height'][:,grid_points.index(site)]=np.array(Annapolis_hydro['tide_height'][:,0])
+        # Adding 30 cm to Annapolis water level since it seems too low
+        tide_data_multicell['tide_height'][:,grid_points.index(site)]=np.array(Annapolis_hydro['tide_height'][:,0])+0.3
         tide_data_multicell['tide_salinity'][:,grid_points.index(site)]=np.array(Annapolis_hydro['tide_salinity'][:,0])
     else:
         tide_data_multicell['tide_height'][:,grid_points.index(site)]=np.array(Erie_hydro['tide_height'][-ntimes:,0])
@@ -82,7 +83,7 @@ surfdata_threecol=xarray.open_dataset('surface_data/surfdata_3col.nc')
 
 # Change this with GPS coordinates for all actual sites
 import pandas
-site_coords=pandas.read_csv('surface_data/COMPASS_sites.csv',na_values=['NA ','NAN']).replace(
+site_data=pandas.read_csv('surface_data/COMPASS_sites.csv',na_values=['NA ','NAN']).replace(
     {'gcrew':'SERC',
      'sweethall':'Sweethall',
      'goodwin':'Goodwin Island',
@@ -99,8 +100,8 @@ cell_width=0.02
 
 for n,site_point in enumerate(grid_points):
     site,point=site_point.split('_')
-    lat=site_coords[(site_coords['site']==site)&(site_coords['zone']==point)]['lat'].astype(float).item()
-    lon=site_coords[(site_coords['site']==site)&(site_coords['zone']==point)]['long'].astype(float).item()
+    lat=site_data[(site_data['site']==site)&(site_data['zone']==point)]['lat'].astype(float).item()
+    lon=site_data[(site_data['site']==site)&(site_data['zone']==point)]['long'].astype(float).item()
     domain_multicell['xc'][0,n]=lat
     if lon>0:
         domain_multicell['yc'][0,n]=lon
@@ -115,23 +116,26 @@ domain_multicell['yv'][0,:,[1,3]] =  domain_multicell['yc'].T - cell_width/2
 surfdata_multicell = xarray.concat([surfdata_threecol]*len(sites),dim='gridcell')
 surfdata_multicell['LONGXY']=domain_multicell['xc']
 surfdata_multicell['ht_above_stream'] = surfdata_multicell['TOPO']
+surfdata_multicell['dist_from_stream'] = surfdata_multicell['ht_above_stream']*0.0
 
 # Add new surface data fields specific to gridded hydrological forcing
 # Let's define land surface heights relative to the trough
 # ht_above_stream in meters units
-elevs=site_coords['elevation']
-elevs=elevs.where((site_coords['zone']=='Wetland')&(elevs.isna()),-5.0)
+elevs=site_data['elevation']
+elevs=elevs.where((site_data['zone']=='Wetland')&(elevs.isna()),-5.0)
 
 for n,site_point in enumerate(grid_points):
     site,point=site_point.split('_')
-    surfdata_multicell['ht_above_stream'][n]=site_coords[(site_coords['site']==site)&(site_coords['zone']==point)]['elevation'].item()
+    surfdata_multicell['ht_above_stream'][n]=site_data[(site_data['site']==site)&(site_data['zone']==point)]['elevation'].item()
+    surfdata_multicell['dist_from_stream'][n]=site_data[(site_data['site']==site)&(site_data['zone']==point)]['distance'].item()
+    
 
     
-surfdata_multicell['ht_above_stream'] = surfdata_multicell['TOPO']-surfdata_multicell['TOPO'][0]
+# surfdata_multicell['ht_above_stream'] = surfdata_multicell['TOPO']-surfdata_multicell['TOPO'][0]
 # Here we specify the height of the polygon relative to the "zero" point in the hydrological forcing (in meters)
 
 # This should just be distance along the transect
-surfdata_multicell['dist_from_stream'] = surfdata_multicell['ht_above_stream']*0.0 + 1.0
+# surfdata_multicell['dist_from_stream'] = surfdata_multicell['ht_above_stream']*0.0 + 1.0
 
 # We can change soil texture including organic content which is important for hydrological and thermal properties
 # that contribute to active layer thickness
@@ -171,6 +175,20 @@ pftnames = [s.strip() for s in [
   "irrigated_soybean                       " ]
 ]
 
+for n,site_point in enumerate(grid_points):
+
+    site,point=site_point.split('_')
+    pointdata=site_data[(site_data['site']==site)&(site_data['zone']==point)]
+
+    surfdata_multicell['PCT_NAT_PFT'][:,n]=0.0
+    surfdata_multicell['PCT_NAT_PFT'][pftnames.index('needleleaf_evergreen_temperate_tree'),n]=pointdata['NET_temperate'].item()
+    surfdata_multicell['PCT_NAT_PFT'][pftnames.index('broadleaf_deciduous_temperate_tree'),n]=pointdata['BDT_temperate'].item()
+    surfdata_multicell['PCT_NAT_PFT'][pftnames.index('broadleaf_evergreen_shrub'),n]=pointdata['BES_temperate'].item()
+    surfdata_multicell['PCT_NAT_PFT'][pftnames.index('broadleaf_deciduous_temperate_shrub'),n]=pointdata['BDS_temperate'].item()
+    surfdata_multicell['PCT_NAT_PFT'][pftnames.index('c3_non-arctic_grass'),n]=pointdata['C3_grass'].item()
+    surfdata_multicell['PCT_NAT_PFT'][pftnames.index('c4_grass'),n]=pointdata['C4_grass'].item()
+
+    
 
 # PFT percents are required to sum to 100 in each grid cell or the model will crash
 if (surfdata_multicell['PCT_NAT_PFT'].sum(dim='natpft')!=100).any():
@@ -182,12 +200,44 @@ surfdata_multicell.to_netcdf('COMPASS_surfdata_multicell.nc')
 domain_multicell.to_netcdf('COMPASS_domain_multicell.nc')
 
 import matplotlib.pyplot as plt
-f,a=plt.subplots(num='Water heights',clear=True,nrows=1)
-a.fill_between(np.arange(len(landcover_types)),np.zeros(len(landcover_types))-.1,surfdata_multicell['ht_above_stream'],ls='-',color='brown',label='Soil surface',step='mid')
-a.axhspan(-0.1,tide_data_multicell['tide_height'].mean(),color='b',alpha=0.5,label='Water level')
-plt.xticks(ticks=np.arange(len(landcover_types)),labels=landcover_types)
-a.set_ylabel('Height (m)')
-a.set(xlim=(0,len(landcover_types)-1.5),ylim=(-0.1,0.23),title='Polygon landform levels')
+f,a=plt.subplots(num='Water heights',clear=True,nrows=2)
+a[0].plot(np.arange(len(grid_points)),surfdata_multicell['ht_above_stream'],ls='-',lw=5.0,color='brown',label='Soil surface',drawstyle='steps-mid')
+a[0].plot(np.arange(len(grid_points)),tide_data_multicell['tide_height'].mean(dim='time'),color='b',alpha=0.5,lw=2.0,label='Mean water level',drawstyle='steps-mid')
+# a.axhline(tide_data_multicell['tide_height'].quantile(0.9),color='b',alpha=0.5,ls='--',label='90th percentile water level')
+# a.axhline(tide_data_multicell['tide_height'].quantile(0.1),color='b',alpha=0.5,ls='--',label='10th percentile water level')
+a[0].fill_between(np.arange(len(grid_points)),tide_data_multicell['tide_height'].quantile(0.1,dim='time'),tide_data_multicell['tide_height'].quantile(0.9,dim='time'),color='b',alpha=0.5,label='Water level',step='mid')
+
+a[0].set_ylabel('Height (m)')
+a[0].set(xlim=(0.,len(grid_points)-1.0),title='Site elevations')
 # a.legend()
+
+bottom=np.zeros(len(grid_points))
+pftnum=0
+for pft in range(surfdata_multicell['PCT_NAT_PFT'].shape[0]):
+    if surfdata_multicell['PCT_NAT_PFT'][pft,:].any():
+        pftfrac=surfdata_multicell['PCT_NAT_PFT'][pft,:]
+        a[1].bar(np.arange(len(bottom)),pftfrac,bottom=bottom,color='C%d'%pftnum,label=pftnames[pft],align='center')
+        bottom=bottom+pftfrac
+        pftnum = pftnum + 1
+a[1].legend()
+a[1].set(xlim=(0.,len(grid_points)-1.0),title='Site vegetation')
+a[1].set_xticks(np.arange(len(grid_points)))
+a[1].set_xticklabels(grid_points,rotation=90)
+a[0].set_xticks([])
+
+f,a=plt.subplots(num='Water time series',nrows=2,clear=True)
+a[0].plot(tide_data_multicell['time']/(24*365),tide_data_multicell['tide_height'][:,0],c='b')
+a[0].axhline(surfdata_multicell['ht_above_stream'][0],ls='--',c='C1',lw=4.0,label='Upland')
+a[0].axhline(surfdata_multicell['ht_above_stream'][1],ls='--',c='C2',lw=4.0,label='Transition')
+a[0].axhline(surfdata_multicell['ht_above_stream'][2],ls='--',c='C3',lw=4.0,label='Wetland')
+a[0].set(title='Chesapeake',xlabel='Time (years)',ylabel='Water level (m)')
+a[0].legend()
+
+a[1].plot(tide_data_multicell['time']/(24*365),tide_data_multicell['tide_height'][:,-1],c='b')
+a[1].axhline(surfdata_multicell['ht_above_stream'][-3],c='C1',ls='--',lw=4.0)
+a[1].axhline(surfdata_multicell['ht_above_stream'][-2],c='C2',ls='--',lw=4.0)
+a[1].axhline(surfdata_multicell['ht_above_stream'][-1],c='C3',ls='--',lw=4.0)
+a[1].set(title='Lake Erie',xlabel='Time (years)',ylabel='Water level (m)')
+
 
 plt.show()
