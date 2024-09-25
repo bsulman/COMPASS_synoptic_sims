@@ -111,14 +111,14 @@ if __name__ == '__main__':
         else:
             domain_multicell['xc'][0,n]=lon+360
 
-    domain_multicell['xv'][0,:,[0,2]] =  domain_multicell['xc'].T + cell_width/2
-    domain_multicell['xv'][0,:,[1,3]] =  domain_multicell['xc'].T - cell_width/2
-    domain_multicell['yv'][0,:,[0,2]] =  domain_multicell['yc'].T + cell_width/2
-    domain_multicell['yv'][0,:,[1,3]] =  domain_multicell['yc'].T - cell_width/2
+    domain_multicell['xv'][0,:,[0,2]] =  domain_multicell['xc'].T.squeeze() + cell_width/2
+    domain_multicell['xv'][0,:,[1,3]] =  domain_multicell['xc'].T.squeeze() - cell_width/2
+    domain_multicell['yv'][0,:,[0,2]] =  domain_multicell['yc'].T.squeeze() + cell_width/2
+    domain_multicell['yv'][0,:,[1,3]] =  domain_multicell['yc'].T.squeeze() - cell_width/2
 
     surfdata_multicell = xarray.concat([surfdata_onecol]*len(sites)*3,dim='lsmlon',data_vars='minimal')
-    surfdata_multicell['LONGXY'][:]=domain_multicell['xc'].squeeze()
-    surfdata_multicell['LATIXY'][:]=domain_multicell['yc'].squeeze()
+    surfdata_multicell['LONGXY'][:]=domain_multicell['xc'].values
+    surfdata_multicell['LATIXY'][:]=domain_multicell['yc'].values
     surfdata_multicell['ht_above_stream'] = surfdata_multicell['TOPO']
     surfdata_multicell['dist_from_stream'] = surfdata_multicell['ht_above_stream']*0.0
 
