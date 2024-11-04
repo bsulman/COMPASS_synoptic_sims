@@ -17,10 +17,6 @@ synoptic = \
 # TODO: Calculate HAND from bay; not distance along transect.
 
 
-# Initially. set up each land cover type as a separate grid cell,
-# but should use using topo units within grid cells in the future.
-# TODO: draw in the land cover remote sensing
-
 #%% Hydrology uses the coastal wetland configuration setup for specifying a time series of hydrological boundary condition
 # Hourly time series, just do one year and the model will repeat it. Currently using water level of zero. 
 # Surface data set below will define ground surface height above drainage to give different hydrological conditions.
@@ -59,6 +55,7 @@ tide_data_multicell = xr.Dataset(
     attrs    ={'Description':'Hydrological boundary conditions for grid cells'}
 )
 
+
 #%% Append hydro, salinity and nitrate variables into an array; set dimensions and metadata
 # TODO: Replace data insertion with actual data for both CB and LE regions. Maybe read in individual files one at a time?
 for site in synoptic.grid_points:
@@ -71,7 +68,11 @@ for site in synoptic.grid_points:
 
 
 
-#-----------------------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------
+# Initially. set up each land cover type as a separate grid cell,
+# but should use using topo units within grid cells in the future.
+# TODO: draw in the land cover remote sensing
+
 #%% DOMAIN  -  Make new multi-grid cell configuration treating each zone as a separate grid cell.
 # This is easier for setting up tidal forcing, but won't work in a larger scale simulation where grid cells need to be spatially defined.
 # Long term solution is to use topo units, but will need to figure a way to do hydro forcing in that framework.
