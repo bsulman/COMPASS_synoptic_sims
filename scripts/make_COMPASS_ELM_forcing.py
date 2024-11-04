@@ -5,16 +5,20 @@ xr.set_options(display_max_rows=10^4) # Increase number of rows printed
 
 
 # Read in site/zone coordinate file
+# TODO: reinclude the distance and PFT in this site.
+# TODO: NLCD
 synoptic = \
-    (pd.read_csv('../data/transect_coords/compass_synoptic.csv')
-    # Filter to Chesapeake Bay
-    .query('region=="Chesapeake Bay"')
-    # Concatenate combinations of sites and land cover in a list of strings
-    .assign(grid_points = synoptic.site + '_' + synoptic.zone)
-    )
+    (pd.read_csv('../data/raw/transect_coords/compass_synoptic.csv')
+    .assign(grid_points = lambda x: x.site + '_' + x.zone)
+    .assign(site_cat = 'synoptic')
+    .rename(columns={"site": "site_id"})
+     )
+
+# TODO: Calculate HAND from bay; not distance along transect.
 
 
-# Initially. set up each land cover type as a separate grid cell, but should use using topo units within grid cells in the future.
+# Initially. set up each land cover type as a separate grid cell,
+# but should use using topo units within grid cells in the future.
 # TODO: draw in the land cover remote sensing
 
 #%% Hydrology uses the coastal wetland configuration setup for specifying a time series of hydrological boundary condition
@@ -26,12 +30,16 @@ synoptic = \
 # TODO: replace these with modules preprocessing the hydro data
 
 # These are different lengths. Erie starts in 1987 but data before that is a harmonic fit Annapolis starts in 1984
-Erie_hydro=xr.open_dataset('../data/hydro_forcing/LakeErie_Gageheight_0salt.nc', decode_times=False)
+Erie_hydro=xr.open_dataset('../data/hydro_forcing/LakeErie_Gageheight_0salt.nc', decode_times=True)# False)
 # Annapolis hydro has a short linear gap filling spot in it that we might want to fix
 Annapolis_hydro=xr.open_dataset('../data/hydro_forcing/Annapolis_schismPlus2_Peter_salinity_WT6_1_39yrs_NAVD.nc', decode_times=False)
 
 
 #%% Set hydro forcing array dimension
+# TODO: plot record length per site; to evaluate tradeoff of converting.
+# TODO: Interpolate to gapfill or cut to common observation periods.
+# Different length will require multiple ELM runs.
+
 
 # Get number of timestep from hydro input
 ntimes = len(Annapolis_hydro['time'])
@@ -50,7 +58,6 @@ tide_data_multicell = xr.Dataset(
                 'gridcell':np.arange(num_grids)},
     attrs    ={'Description':'Hydrological boundary conditions for grid cells'}
 )
-
 
 #%% Append hydro, salinity and nitrate variables into an array; set dimensions and metadata
 # TODO: Replace data insertion with actual data for both CB and LE regions. Maybe read in individual files one at a time?
@@ -71,7 +78,7 @@ for site in synoptic.grid_points:
 # Here we start from the single grid cell configuration for the site and then multiply it into multiple grid cells
 
 # Read in NCDF array of synoptic transect domain, containing gricell area, fraction, mask and pixel coordinates.
-# TODO: Check if/how to update the fractions (currently from ORCHIDEE?)
+# TODO: Check if/how to update the fractions (currently from ORCHIDEE?); from Wei's transect?
 domain_threecol = xr.open_dataset('../data/surface_data/domain_3col.nc')
 # Repeat identical domain for each site.
 domain_multicell = xr.concat([domain_threecol] * synoptic.site.nunique(), dim='ni')
@@ -91,9 +98,11 @@ for index, row in synoptic.iterrows():
         domain_multicell['yc'][0,index] = row.long + 360
 
 # Modify the domain coordinates
+# Used to query the meteorological forcings from Daymet.
 # FIXME: This throws error: "new dimensions ('ni', 'nv') must be a superset of existing dimensions ('ni', 'nj')"
 #   Check with Ben S. what is meant to happen
-#   dimensions of domain_multicell:  nj = 1 ; ni = 12 ;  nv = 4 ;
+#   dimensions of domain_multicell:  nj = 1 ; ni = 12 ;  nv = 4;
+
 domain_multicell['xv'][0,:,[0,2]] = domain_multicell['xc'].T + cell_width/2
 domain_multicell['xv'][0,:,[1,3]] = domain_multicell['xc'].T - cell_width/2
 domain_multicell['yv'][0,:,[0,2]] = domain_multicell['yc'].T + cell_width/2
