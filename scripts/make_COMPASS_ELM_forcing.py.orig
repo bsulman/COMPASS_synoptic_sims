@@ -21,18 +21,20 @@ synoptic = \
 # Hourly time series, just do one year and the model will repeat it. Currently using water level of zero. 
 # Surface data set below will define ground surface height above drainage to give different hydrological conditions.
 
+<<<<<<< HEAD
 if __name__ == '__main__':
     # These are different lengths. Erie starts in 1987 but data before that is a harmonic fit
     # Anapolis starts in 1984
     Erie_hydro=xarray.open_dataset('hydro_forcing/LakeErie_Gageheight_0salt.nc',decode_times=False)
     # Annapolis hydro has a short linear gap filling spot in it that we might want to fix
     Annapolis_hydro=xarray.open_dataset('hydro_forcing/Annapolis_schismPlus2_Peter_salinity_WT6_1_39yrs_NAVD.nc',decode_times=False)
-
+||||||| parent of cce8bff (updated forcing formatting)
 # These are different lengths. Erie starts in 1987 but data before that is a harmonic fit
 # Anapolis starts in 1984
 Erie_hydro=xarray.open_dataset('hydro_forcing/LakeErie_Gageheight_0salt.nc',decode_times=False)
 # Annapolis hydro has a short linear gap filling spot in it that we might want to fix
 Annapolis_hydro=xarray.open_dataset('hydro_forcing/Annapolis_schismPlus2_Peter_salinity_WT6_1_39yrs_NAVD.nc',decode_times=False)
+=======
 
 #%% Read in hydrological forcings from each site
 # TODO: replace these with modules preprocessing the hydro data
@@ -41,9 +43,11 @@ Annapolis_hydro=xarray.open_dataset('hydro_forcing/Annapolis_schismPlus2_Peter_s
 Erie_hydro=xr.open_dataset('../data/hydro_forcing/LakeErie_Gageheight_0salt.nc', decode_times=False)
 # Annapolis hydro has a short linear gap filling spot in it that we might want to fix
 Annapolis_hydro=xr.open_dataset('../data/hydro_forcing/Annapolis_schismPlus2_Peter_salinity_WT6_1_39yrs_NAVD.nc', decode_times=False)
+>>>>>>> cce8bff (updated forcing formatting)
 
-ntimes=len(Annapolis_hydro['time'])
-tide_data_multicell=xarray.Dataset(
+<<<<<<< HEAD
+    ntimes=len(Annapolis_hydro['time'])
+    tide_data_multicell=xarray.Dataset(
         data_vars={'tide_height':xarray.Variable(('time','gridcell'),data=np.zeros((ntimes,num_grids))+0.1,attrs={'units':'m'}),
                 'tide_salinity':xarray.Variable(('time','gridcell'),data=np.zeros((ntimes,num_grids)),attrs={'units':'ppt'}),
                 # Setting nonzero nitrate so leaching doesn't become a problem
@@ -53,7 +57,7 @@ tide_data_multicell=xarray.Dataset(
                     'gridcell':np.arange(num_grids)},
         attrs    ={'Description':'Hydrological boundary conditions for grid cells'}
     )
-
+||||||| parent of cce8bff (updated forcing formatting)
 ntimes=len(Annapolis_hydro['time'])
 tide_data_multicell=xarray.Dataset(
     data_vars={'tide_height':xarray.Variable(('time','gridcell'),data=np.zeros((ntimes,num_grids))+0.1,attrs={'units':'m'}),
@@ -65,6 +69,7 @@ tide_data_multicell=xarray.Dataset(
                 'gridcell':np.arange(num_grids)},
     attrs    ={'Description':'Hydrological boundary conditions for grid cells'}
 )
+=======
 
 #%% Set hydro forcing array dimension
 
@@ -85,7 +90,9 @@ tide_data_multicell = xr.Dataset(
                 'gridcell':np.arange(num_grids)},
     attrs    ={'Description':'Hydrological boundary conditions for grid cells'}
 )
+>>>>>>> cce8bff (updated forcing formatting)
 
+<<<<<<< HEAD
     for site in grid_points:
         if site.split('_')[0] in ['SERC','Sweethall','Goodwin Island','Moneystump']:
             # Adding 30 cm to Annapolis water level since it seems too low
@@ -94,8 +101,7 @@ tide_data_multicell = xr.Dataset(
         else:
             tide_data_multicell['tide_height'][:,grid_points.index(site)]=np.array(Erie_hydro['tide_height'][-ntimes:,0])
             tide_data_multicell['tide_salinity'][:,grid_points.index(site)]=np.array(Erie_hydro['tide_salinity'][-ntimes:,0])
-
-
+||||||| parent of cce8bff (updated forcing formatting)
 for site in grid_points:
     if site.split('_')[0] in ['SERC','Sweethall','Goodwin Island','Moneystump']:
         tide_data_multicell['tide_height'][:,grid_points.index(site)]=np.array(Annapolis_hydro['tide_height'][:,0])
@@ -103,6 +109,7 @@ for site in grid_points:
     else:
         tide_data_multicell['tide_height'][:,grid_points.index(site)]=np.array(Erie_hydro['tide_height'][-ntimes:,0])
         tide_data_multicell['tide_salinity'][:,grid_points.index(site)]=np.array(Erie_hydro['tide_salinity'][-ntimes:,0])
+=======
 
 #%% Append hydro, salinity and nitrate variables into an array; set dimensions and metadata
 # TODO: Replace data insertion with actual data for both CB and LE regions. Maybe read in individual files one at a time?
@@ -113,47 +120,62 @@ for site in synoptic.grid_points:
     else: # If not among Chesapeake region; use Erie forcing (check diff dimensions)
         tide_data_multicell['tide_height'][:,grid_points.index(site)]    = np.array(Erie_hydro['tide_height'][-ntimes:,0])
         tide_data_multicell['tide_salinity'][:,grid_points.index(site)]  = np.array(Erie_hydro['tide_salinity'][-ntimes:,0])
+>>>>>>> cce8bff (updated forcing formatting)
 
+<<<<<<< HEAD
     # f,a=plt.subplots(nrows=2,num='Tide forcing',clear=True)
     # for n,site in enumerate(grid_points):
     #     tide_data_multicell['tide_height'].isel(gridcell=n).plot(ax=a[0],label=site)
     #     tide_data_multicell['tide_salinity'].isel(gridcell=n).plot(ax=a[1],label=site)
     # a[0].legend()
-
+||||||| parent of cce8bff (updated forcing formatting)
 # f,a=plt.subplots(nrows=2,num='Tide forcing',clear=True)
 # for n,site in enumerate(grid_points):
 #     tide_data_multicell['tide_height'].isel(gridcell=n).plot(ax=a[0],label=site)
 #     tide_data_multicell['tide_salinity'].isel(gridcell=n).plot(ax=a[1],label=site)
 # a[0].legend()
+=======
+>>>>>>> cce8bff (updated forcing formatting)
 
+<<<<<<< HEAD
     # Make new multi-grid cell configuration. Treating each land cover type as a separate grid cell
     # This is easier for setting up tidal forcing, but won't work in a larger scale simulation where grid cells need to be spatially defined
     # Long term solution is to use topo units, but will need to figure a way to do hydro forcing in that framework
     # Here we start from the single grid cell configuration for the site and then multiply it into multiple grid cells
+||||||| parent of cce8bff (updated forcing formatting)
+# Make new multi-grid cell configuration. Treating each land cover type as a separate grid cell
+# This is easier for setting up tidal forcing, but won't work in a larger scale simulation where grid cells need to be spatially defined
+# Long term solution is to use topo units, but will need to figure a way to do hydro forcing in that framework
+# Here we start from the single grid cell configuration for the site and then multiply it into multiple grid cells
+=======
 
 #-----------------------------------------------------------------------------------------------------------------------
 #%% DOMAIN  -  Make new multi-grid cell configuration treating each zone as a separate grid cell.
 # This is easier for setting up tidal forcing, but won't work in a larger scale simulation where grid cells need to be spatially defined.
 # Long term solution is to use topo units, but will need to figure a way to do hydro forcing in that framework.
 # Here we start from the single grid cell configuration for the site and then multiply it into multiple grid cells
+>>>>>>> cce8bff (updated forcing formatting)
 
+<<<<<<< HEAD
+    domain_threecol=xarray.open_dataset('surface_data/domain_3col.nc')
+    surfdata_threecol=xarray.open_dataset('surface_data/surfdata_3col.nc')
+    surfdata_onecol=xarray.open_dataset('surface_data/surfdata_1x1pt_US-GC_TransTEMPEST_c20230901.nc')
+    # landuse_onecol=xarray.open_dataset(f'/nfs/data/ccsi/proj-shared/E3SM/pt-e3sm-inputdata/atm/datm7/GSWP3_daymet/cpl_bypass_{site}/surfdata.pftdyn.nc')
+||||||| parent of cce8bff (updated forcing formatting)
 domain_threecol=xarray.open_dataset('surface_data/domain_3col.nc')
 surfdata_threecol=xarray.open_dataset('surface_data/surfdata_3col.nc')
-surfdata_onecol=xarray.open_dataset('surface_data/surfdata_1x1pt_US-GC_TransTEMPEST_c20230901.nc')
 # landuse_onecol=xarray.open_dataset(f'/nfs/data/ccsi/proj-shared/E3SM/pt-e3sm-inputdata/atm/datm7/GSWP3_daymet/cpl_bypass_{site}/surfdata.pftdyn.nc')
-
-domain_threecol=xarray.open_dataset('surface_data/domain_3col.nc')
-surfdata_threecol=xarray.open_dataset('surface_data/surfdata_3col.nc')
-# landuse_onecol=xarray.open_dataset(f'/nfs/data/ccsi/proj-shared/E3SM/pt-e3sm-inputdata/atm/datm7/GSWP3_daymet/cpl_bypass_{site}/surfdata.pftdyn.nc')
-
+=======
 # Read in NCDF array of synoptic transect domain, containing gricell area, fraction, mask and pixel coordinates.
 # TODO: Check if/how to update the fractions (currently from ORCHIDEE?)
 domain_threecol = xr.open_dataset('../data/surface_data/domain_3col.nc')
 # Repeat identical domain for each site.
 domain_multicell = xr.concat([domain_threecol] * synoptic.site.nunique(), dim='ni')
+>>>>>>> cce8bff (updated forcing formatting)
 
-# Change this with GPS coordinates for all actual sites
-import pandas
+<<<<<<< HEAD
+    # Change this with GPS coordinates for all actual sites
+    import pandas
     site_data=pandas.read_csv('surface_data/COMPASS_sites.csv',na_values=['NA ','NAN']).replace(
         {'gcrew':'SERC',
         'sweethall':'Sweethall',
@@ -186,8 +208,12 @@ site_coords=pandas.read_csv('surface_data/COMPASS_sites.csv',na_values=['NA ','N
 domain_multicell=xarray.concat([domain_threecol]*len(sites),dim='ni')
 # Assume all grid cells are the same size.
 cell_width=0.02
+=======
 # Set cell size; Assume all grid cells are the same size.
+cell_width=0.02
+>>>>>>> cce8bff (updated forcing formatting)
 
+<<<<<<< HEAD
     for n,site_point in enumerate(grid_points):
         site,point=site_point.split('_')
         lat=site_data[(site_data['site']==site)&(site_data['zone']==point)]['lat'].astype(float).item()
@@ -197,7 +223,7 @@ cell_width=0.02
             domain_multicell['xc'][0,n]=lon
         else:
             domain_multicell['xc'][0,n]=lon+360
-
+||||||| parent of cce8bff (updated forcing formatting)
 for n,site_point in enumerate(grid_points):
     site,point=site_point.split('_')
     lat=site_coords[(site_coords['site']==site)&(site_coords['zone']==point)]['lat'].astype(float).item()
@@ -207,6 +233,7 @@ for n,site_point in enumerate(grid_points):
         domain_multicell['yc'][0,n]=lon
     else:
         domain_multicell['yc'][0,n]=lon+360
+=======
 # Copy df to new name
 site_coords = synoptic.copy()
 
@@ -217,8 +244,9 @@ for index, row in synoptic.iterrows():
         domain_multicell['yc'][0,index] = row.long
     else:
         domain_multicell['yc'][0,index] = row.long + 360
+>>>>>>> cce8bff (updated forcing formatting)
 
-
+<<<<<<< HEAD
     domain_multicell['xv'][0,:,[0,2]] =  domain_multicell['xc'].T.squeeze() + cell_width/2
     domain_multicell['xv'][0,:,[1,3]] =  domain_multicell['xc'].T.squeeze() - cell_width/2
     domain_multicell['yv'][0,:,[0,2]] =  domain_multicell['yc'].T.squeeze() + cell_width/2
