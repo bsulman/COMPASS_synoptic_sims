@@ -1,0 +1,140 @@
+---
+title: 'COMPASS Synoptic CB: AQ600 Water Level Calculation'
+author: "Stephanie J. Wilson & Peter Regier"
+date: "2024-05-14"
+output: html_document
+---
+#COMPASS Synoptic CB 
+#Aquatroll waterlevel calculations 
+
+Authors: Peter Regier & Stephanie J. Wilson 
+Last Updated: 05-07-2024
+
+Goal of this code: 
+  To take the raw L1 data and calculate waterlevels from pressure and density measured by the aquatroll overtime 
+```{r setup, include=FALSE}
+
+library(googlesheets4)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+#Read in L1 Dataset
+```{r}
+
+#download the L1 dataset from: https://drive.google.com/drive/folders/1RP-hxmjAYNGzTfCNpYbMN6U_zbZmEWHM
+
+#set path to local drive where files can be found: 
+L1 <- "S:/Biogeochemistry/COMPASS Synoptics/Samples & Data/Synoptic L1 Sensor/L1_20240507"
+
+#read in datafiles from L1 
+files <- list.files(L1, pattern = "*.csv", full.names = TRUE, recursive = TRUE)
+
+```
+
+#Read files and create master dataframe
+```{r}
+#create dataframe for collated data 
+results <- list()
+
+#for(f in files[[150]]){ #example to trial with a single file
+for(f in files){
+  message(f)
+  
+  selected_research_names = c("gw_pressure", "gw_density", "gw_temperature", "gw_salinity")
+  
+  dat <- read.csv(f)
+  
+  troll <- subset(dat, Instrument == "AquaTROLL600")
+  
+  gw <- troll %>% 
+    filter(research_name %in% selected_research_names) %>%
+    dplyr::select(TIMESTAMP, research_name, Value, F_OOB, F_OOS, Plot, Site)
+  
+  results[[f]] <- gw 
+}
+
+#we need to bind these together 
+dat <- do.call(rbind, results)
+rownames(dat) <- NULL
+head(dat)
+
+#convert to wide format 
+gw1 <- pivot_wider(dat, id_cols = c("TIMESTAMP", "Plot", "Site"), names_from = research_name, values_from = Value )
+head(gw1)
+
+```
+
+#Pull in Well Dimension & Depth to Sensor Data
+```{r}
+## Second, read in well dimensions. These are measurements made when installing
+## sensors, and are used to calculate the distance below-ground that the 
+well_dimensions <- read_sheet("https://docs.google.com/spreadsheets/d/1O4sHvj2FO7EcWEm3WpKEZhFubGn8HCcUsz9EFXhQTXM/edit#gid=0") %>% 
+  mutate(Plot = case_when(transect_location == "Upland" ~ "UP", 
+                              transect_location == "Transition" ~ "TR", 
+                              transect_location == "Wetland" ~ "W"), 
+         ground_to_sensor_cm = ring_to_pressure_sensor_cm - (well_top_to_ground_cm - bolt_to_cap_cm)) %>% 
+  dplyr::select(site, Plot, ground_to_sensor_cm)
+
+#Got to change the Column names so that Site is also startign with a captial letter 
+#colnames(well_dimensions) <- c("Site", "Plot", "ground_to_sensor_cm")
+#head(well_dimensions)
+
+## Add well dimensions to dataset: inner_join ensures no uncorrected WL data makes it through
+df_raw_depths <- inner_join(gw1, well_dimensions, by = c("Site" = "site", "Plot")) #%>% 
+  #filter(!is.na(pressure_mbar))
+head(df_raw_depths)
+
+```
+
+#Calculate water depth from pressure, density, and well data
+```{r}
+
+#gw_density 
+#L1 data bounds: 0.98, 1.05
+#units g/cm3
+
+#gw_pressure          
+#sensor units: psi      
+#L1 data set units: mbar      
+#L1 data bounds: -10, 910    
+#Info: AQ600 Vented pressure already corrected for barometric pressure
+
+#Convert to water depth (h = P [mbar] * 100 [Pa/mbar])/(rho [g/cm3]*1000 [kg/m3//g/cm3]*g [m/s2]) where [Pa]=[kgm/s2m2]
+#9.80665 = specific gravity 
+
+#second step is water level below surface of ground (divide ground to sensor so it is in m) subtract ground to sensor from pressure head
+
+df <- df_raw_depths %>% 
+  mutate(pressurehead_m = (gw_pressure * 100) / (gw_density * 1000 * 9.80665), 
+         wl_below_surface_m = pressurehead_m - (ground_to_sensor_cm / 100)) 
+head(df)
+
+
+```
+
+#Take an initial look at the data 
+```{r}
+#should we try to do some initial plots? 
+#maybe we subset by week or something and plot some up? 
+
+
+ggplot(df, aes(TIMESTAMP, wl_below_surface_m, color = Plot)) +
+  geom_point( alpha = 0.5) +
+  facet_wrap(~Site, nrow = 1, scales = "free_y") +
+  labs(x = "", y = "y_lab") #+
+  #scale_color_manual(values = location_colors) #+
+  #scale_x_datetime(date_breaks = "3 days", date_labels = "%m/%d")
+
+```
+
+#Read out and save waterlevel data 
+```{r}
+#set a new working directory to put this in 
+#setwd("S:/Biogeochemistry/COMPASS Synoptics/Samples & Data/Fluxes/Macrophyte GHG Fluxes/Flux Calculations/Air Temp Data")
+
+#write.csv(dat, "COMPASS_Synoptic_CB_WaterLevels.csv")
+
+
+```
