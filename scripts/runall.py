@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 
 
 import pandas as pd
@@ -13,7 +12,6 @@ import fiona
 from rasterstats import zonal_stats
 import rasterio as rio
 from matplotlib import pyplot
-
 import rasterstats
 
 import pandas as pd
@@ -37,8 +35,18 @@ os.getcwd()
 # PREP ELEVATION
 # TODO: convert everything to Mean lower low water (MLLW)?
 
+# TODO:  Check where zone v3 gets saved;  where is latest elev script?
+'prep_points/prep_site_coords.py'
+
 # Make Synoptic+EXCHANGE points from coordinates
 # prep_pts
+
+
+#---------------------------------------------
+# PREP DISTANCE FROM PERMANENT WATERBODY
+
+
+
 
 #---------------------------------------------
 # PREP WATER LEVEL & SALINITY
@@ -49,6 +57,14 @@ os.getcwd()
 # Prep transect groundwater wells
 'prep_hydro/prep_gw_depth.py'
 
+# Gapfill hydro forcings
+'prep_hydro/gapfill_hydro_forcing.py'
+
+# Fix forcings
+'prep_hydro/fix_hydro_forcing.py'
+
+
+
 
 # TODO: verify elevation of points
 # TODO: Convert everything to local time (or all GMT?)
@@ -57,15 +73,14 @@ os.getcwd()
 #---------------------------------------------
 # FORMAT FORCING FOR ELM
 
+# Plot
+'plot/ploy_buoy_forcing.py'
 
 
 # plot heatmap
 # plot elev transect
 # Prep kmz
 # 'get_kmz_synoptic.py'
-||||||| af2305f
-=======
-
 
 import pandas as pd
 import matplotlib
@@ -123,4 +138,3 @@ os.getcwd()
 
 #%% MAKE COMPASS ELM FORCINGS
 # Finally - update forcings
->>>>>>> newforcings_rebased

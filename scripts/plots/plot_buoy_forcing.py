@@ -1,6 +1,6 @@
 
 
-# /--------------------------------------------------------------------
+# /-------------------------------------------------------------------------------
 #/  Get synoptic groundwater wells data
 gw_depth_df = pd.read_csv('../../output/results/sensor_gauges/synoptic_gw_elev.csv')  # synoptic_gw_pressure.csv')
 gw_depth_df['TIMESTAMP_hourly'] = pd.to_datetime(gw_depth_df['TIMESTAMP_hourly'], errors='coerce')
@@ -11,7 +11,7 @@ gw_depth_df['TIMESTAMP_hourly'] = pd.to_datetime(gw_depth_df['TIMESTAMP_hourly']
 
 # Read in Buoy data
 boundary_wl_df = pd.read_csv(
-    '../../output/results/hydro_forcing_gauges/buoy_wl_all_syn_v2.csv',
+    '../../output/results/hydro_forcing_gauges/buoy_wl_all_syn_v4_filled_fixed.csv',
     low_memory=False)
 
 # Convert datatype
@@ -21,21 +21,13 @@ boundary_wl_df['water_height_m'] = pd.to_numeric(boundary_wl_df['water_height_m'
 boundary_wl_df['datetime'] = pd.to_datetime(boundary_wl_df['datetime'], errors='coerce')
 
 
-### FILTER TIME
-# boundary_wl_df = boundary_wl_df.head(10000)
-start_date = '2020-01-01'
-end_date = '2023-12-31'
-
-# Filter DataFrame by date range
-boundary_wl_df = boundary_wl_df[(boundary_wl_df['datetime'] >= start_date) & (boundary_wl_df['datetime'] <= end_date)]
-
-
 # ###  TO PLOT GEOM LINES, NEED TO ADD MISSING DATES TO PREVENT LINES OVER GAPS
 # df =  gw_depth_df.copy()
 # dates = pd.DataFrame()
 # # Create a complete range of hourly datetimes from min to max datetime in the DataFrame
 # dates['TIMESTAMP_hourly'] = pd.date_range(start=df['TIMESTAMP_hourly'].min(), end=df['TIMESTAMP_hourly'].max(), freq='h')
 # gw_depth_df = pd.concat([gw_depth_df, dates], axis=0)
+
 
 #----------------------------------------------------------------------------------
 # from plotnine import ggplot, aes, theme, geom_point, theme_minimal,  labs, geom_histogram, coord_flip, facet_wrap
@@ -62,6 +54,7 @@ boundary_wl_df['site_name'] = pd.Categorical(boundary_wl_df['site_name'], catego
 gw_depth_df['site_name'] = pd.Categorical(gw_depth_df['site_name'], categories=site_order, ordered=True)
 
 
+
 # /--------------------------------------------------------------------
 #/   PLOT ELEVATION
 # p = (
@@ -73,7 +66,8 @@ gw_depth_df['site_name'] = pd.Categorical(gw_depth_df['site_name'], categories=s
     #             aes(x='datetime', y='tide_height_m', color='buoy_name'), size = 0.2)
 
     # Plot CB buoys water HEIGHT
-    + geom_line(boundary_wl_df,
+    + geom_line(#boundary_wl_df,
+                boundary_wl_df.dropna(subset=['water_height_m']),
                 aes(x='datetime', y='water_height_m', color='zone_name'), size=0.2)
 
     # Plot in synoptic wells WTD - DEPTH
@@ -81,7 +75,7 @@ gw_depth_df['site_name'] = pd.Categorical(gw_depth_df['site_name'], categories=s
                aes(x='TIMESTAMP_hourly', y='gw_elev_m', color='zone_name'), size=0.2)
 
 
-    + scale_x_datetime(breaks=date_breaks('1 year'), labels=date_format('%Y'))
+    + scale_x_datetime(breaks=date_breaks('2 year'), labels=date_format('%Y'))
     + labs(x='', y='Water Elevation (NAVD88, m)')
     + facet_wrap("site_name", scales="free", ncol=3)
 
@@ -92,9 +86,39 @@ gw_depth_df['site_name'] = pd.Categorical(gw_depth_df['site_name'], categories=s
             panel_grid_minor=element_blank())
             # axis_text_x=element_text(rotation=90, hjust=1))
 
-    ).save('../../output/figures/hydro_forcing_gauges/in_situ_wl_all_ts_v16.png',
+    ).save('../../output/figures/hydro_forcing_gauges/in_situ_wl_all_ts_v21.png',
        width=12, height=8, dpi=300, verbose = False)
 
+
+
+# /--------------------------------------------------------------------
+#/   PLOT SALINITY                                      ----------
+
+(
+    ggplot()
+
+    # Plot CB buoys water HEIGHT
+    + geom_line(boundary_wl_df.dropna(subset=['water_salinity']),
+                aes(x='datetime', y='water_salinity', color='zone_name'), size=0.2)
+
+    # Plot in synoptic wells WTD - DEPTH
+    + geom_line(gw_depth_df,
+               aes(x='TIMESTAMP_hourly', y='gw_salinity', color='zone_name'), size=0.2)
+
+
+    + scale_x_datetime(breaks=date_breaks('2 year'), labels=date_format('%Y'))
+    + labs(x='', y='Salinity (PSU)')
+    + facet_wrap("site_name", scales="free", ncol=3)
+
+    + guides(color=guide_legend(title=""))
+    + theme_bw()
+    + theme(legend_position= (0.8, 0.1), #'none',
+            panel_grid_major=element_blank(),
+            panel_grid_minor=element_blank())
+            # axis_text_x=element_text(rotation=90, hjust=1))
+
+    ).save('../../output/figures/hydro_forcing_gauges/in_situ_salinity_v21.png',
+       width=12, height=8, dpi=300, verbose = False)
 
 
 
@@ -145,41 +169,6 @@ ground_elev['zone_name'] = pd.Categorical(ground_elev['zone_name'], categories=z
 
     ).save('../../output/figures/in_situ_wl_all_ts_15_violin.png',
        width=12, height=8, dpi=300, verbose = False)
-
-
-
-
-
-
-# /--------------------------------------------------------------------
-#/   PLOT SALINITY                                      ----------
-
-(
-    ggplot()
-
-    # Plot CB buoys water HEIGHT
-    + geom_line(boundary_wl_df,
-                aes(x='datetime', y='water_salinity', color='zone_name'), size=0.2)
-
-    # Plot in synoptic wells WTD - DEPTH
-    + geom_line(gw_depth_df,
-               aes(x='TIMESTAMP_hourly', y='gw_salinity', color='zone_name'), size=0.2)
-
-
-    + scale_x_datetime(breaks=date_breaks('1 year'), labels=date_format('%Y'))
-    + labs(x='', y='Salinity (PSU)')
-    + facet_wrap("site_name", scales="free", ncol=3)
-
-    + guides(color=guide_legend(title=""))
-    + theme_bw()
-    + theme(legend_position= (0.8, 0.1), #'none',
-            panel_grid_major=element_blank(),
-            panel_grid_minor=element_blank())
-            # axis_text_x=element_text(rotation=90, hjust=1))
-
-    ).save('../../output/figures/hydro_forcing_gauges/in_situ_salinity_v16.png',
-       width=12, height=8, dpi=300, verbose = False)
-
 
 
 

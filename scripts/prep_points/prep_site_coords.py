@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 
 import rasterio
 from rasterio.merge import merge
@@ -169,6 +169,7 @@ elev_dir = '../../output/results/elev/'
 if 1:
     outdf_j.to_csv(elev_dir + 'synoptic_elev_transect_v3.csv', index=False)
 
+# Select columns
 outdf_j = outdf_j.iloc[:,[11,0,10,1,2,3,4,5,6,7,8,9,12]]
 
 (outdf_j.query("zone.notna()", engine='python')
@@ -176,8 +177,6 @@ outdf_j = outdf_j.iloc[:,[11,0,10,1,2,3,4,5,6,7,8,9,12]]
  .to_csv(elev_dir + 'synoptic_elev_zone_v3.csv', index=False)
  )
 
-||||||| af2305f
-=======
 
 syn_sites = (pd.read_csv('../surface_data/COMPASS_sites.csv')  # Read file of site locations
              .query('region=="CB"')  # Filter to Chesapeake Bay
@@ -196,4 +195,3 @@ syn_sites['site_cat'] = 'synoptic'
 
 # Save to file
 if 0: syn_sites.to_file('../../../data/synoptic_sites/synoptic_sites_pts.geojson')
->>>>>>> newforcings_rebased

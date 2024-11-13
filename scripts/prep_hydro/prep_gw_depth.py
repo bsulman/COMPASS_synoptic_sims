@@ -172,8 +172,8 @@ gw_depth_df = (
 #/  Filter outliers
 
 # Define the rolling window size and z-score threshold
-window_size = 365
-z_score_threshold = 5
+window_size = 365*5
+z_score_threshold = 1.5
 
 # Calculate rolling mean, std, z-score, and filter based on z-score threshold
 gw_depth_df = (
@@ -199,7 +199,7 @@ gw_depth_df = (
 
 # /--------------------------------------------------------------------
 #/  Write synoptic well data to a CSV file
-output_filename = '../../output/results/sensor_gauges/synoptic_gw_elev.csv'
+output_filename = '../../output/results/sensor_gauges/synoptic_gw_elev_v2.csv'
 gw_depth_df.to_csv(output_filename, index=False)
 
 

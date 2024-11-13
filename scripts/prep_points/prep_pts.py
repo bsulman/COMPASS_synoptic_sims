@@ -28,8 +28,6 @@ synoptic = \
 
 synoptic_wgs84 = (synoptic.to_crs("EPSG:4326").reset_index())
 
-
-
 # Save points
 synoptic_wgs84.to_file('../data/processed/synoptic_pts_wgs84.geojson')
 

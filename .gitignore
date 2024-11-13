@@ -1,2 +1,4 @@
 .DS_Store
 __pycache__/
+*/.idea/workspace.xml 
+*/.idea/tasks.xml
