@@ -17,7 +17,8 @@ print(os.getcwd())
 sal_stations = (pd.read_csv('../../../data/WaterQualityStationStation.csv'))
 
 # Convert coords to point
-sal_stations = (gpd.GeoDataFrame(sal_stations, geometry=gpd.points_from_xy(sal_stations.Longitude, sal_stations.Latitude, crs="EPSG:4269"))
+sal_stations = \
+        (gpd.GeoDataFrame(sal_stations, geometry=gpd.points_from_xy(sal_stations.Longitude, sal_stations.Latitude, crs="EPSG:4269"))
         .to_crs("EPSG:26918")
         .reset_index()
         )

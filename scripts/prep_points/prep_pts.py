@@ -28,7 +28,7 @@ synoptic = \
 
 synoptic_wgs84 = (synoptic.to_crs("EPSG:4326").reset_index())
 
-# Save points
+# Save synoptic points to file
 synoptic_wgs84.to_file('../data/processed/synoptic_pts_wgs84.geojson')
 
 
@@ -67,11 +67,6 @@ ex_sites = (
 
 ex_sites['site_cat'] = 'exchange'
 
-
-# Print fixes
-# ex_sites.longitude.max()
-# ex_sites.sort_values(by=['longitude'], ascending=False).loc[:, ['site_id','longitude']]
-
 #--------------------------------------------------------------------------
 #%% Combine sites
 all_sites_utm = (pd.concat([ex_sites, syn_sites])
@@ -83,6 +78,8 @@ all_sites_wgs84 = (all_sites_utm.to_crs("EPSG:4326"))
             #            syn_sites.to_crs("EPSG:4326")])
             # .reset_index()))
 
+
+#--------------------------------------------------------------------------
 # Save points
 if 1:
     all_sites_utm.to_file('../../../data/site_pts/all/all_sites_utm_v01.geojson')

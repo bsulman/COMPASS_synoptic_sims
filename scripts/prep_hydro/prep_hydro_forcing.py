@@ -4,48 +4,11 @@ import glob
 import xarray as xr
 
 
-# Function preparing VECOS data for Goodwin and Sweethall
-def prep_vecos_waterquality_station(directory):
-
-    import pandas as pd
-    import os
-
-    # Initialize an empty list to store dataframes
-    dfs = []
-
-    # Loop through all files in the directory
-    for filename in os.listdir(directory):
-        if filename.endswith('.csv'):
-            filepath = os.path.join(directory, filename)
-            dfs.append(pd.read_csv(filepath))              # Read the CSV file and append the dataframe to the list
-
-    # Concatenate all dataframes in the list into a single dataframe
-    df = pd.concat(dfs, ignore_index=True)
-    # print(df.columns)
-
-    # Ensure the 'time' column is in datetime format
-    df['SAMPLE_DATETIME'] = pd.to_datetime(df['SAMPLE_DATETIME'])
-
-    # Select columns
-    df = df.loc[:, ['SAMPLE_DATETIME', 'SALINITY', 'TOTAL_DEPTH']]
-
-    # Resample the DataFrame to hourly intervals and compute the mean
-    df.set_index('SAMPLE_DATETIME', inplace=True)  # Set time as index
-    df = df.resample('H').mean().reset_index()
-
-    # write station
-    df['STATION'] = os.path.basename(directory)
-
-    # Convert to datetime
-    df['SAMPLE_DATETIME'] = pd.to_datetime(df['SAMPLE_DATETIME'])
-
-    df = df[['STATION', 'SAMPLE_DATETIME', 'SALINITY', 'TOTAL_DEPTH']]
-
-    return(df)
-
 
 #----------------------------------------------------------------------------------
 #  Run VECOS stations and save to file
+
+from prep_hydro.fcn.prep_vecos import prep_vecos_waterquality_station
 
 df_goodwin = prep_vecos_waterquality_station(directory = '../../data/buoys/GoodwinIsland_CH019.38')
 df_sweethall = prep_vecos_waterquality_station(directory = '../../data/buoys/SweetHallMarsh_PMK012.18')
@@ -156,8 +119,6 @@ gcrew_water_height_df = \
      )
 
 
-
-
 #----------------------------------------------------------------------------------
 # Prep Moneystumps salinity
 # TODO: Fix the large gaps
@@ -167,7 +128,6 @@ dirpat = '../../data/buoys/Moneystump/salinity/*CEDR_tidal*.csv'
 
 # Find all files matching the pattern
 files = glob.glob(dirpat, recursive=True)
-files
 
 # Initialize an empty DataFrame
 all_data = pd.DataFrame()
@@ -196,18 +156,9 @@ moneystump_salinity = \
 moneystump_salinity = moneystump_salinity[['site','station','datetime', 'water_salinity']]
 
 
-
-
-# moneystump_salinity['datetime'].min()
-# moneystump_salinity['datetime'].max()
-# moneystump_waterheight['datetime'].min()
-# moneystump_waterheight['datetime'].max()
-# moneystump_salinity.columns
-
-
 #----------------------------------------------------------------------------------
-# Prep Moneystump water level
-# There is a real data gap in 2013
+# Prep Moneystump water level.
+# NOTE: There is a real data gap in 2013
 
 # Define the directory and pattern
 dirpat = '../../data/buoys/Moneystump/depth/*.csv'
@@ -232,21 +183,7 @@ all_data = \
 # Filter columns
 all_data = all_data[['site', 'station','datetime', 'water_height_m']]
 
-moneystump_waterheight = all_data.copy().sort_values(by=['datetime']) # ascending=False)
-
-
-#----------------------------------------------------------------------------------
-#  COMBINE MONEYSTUMP SALINITY AND WATER LEVEL
-# moneystump_df = (
-#     moneystump_waterheight.merge(
-#         moneystump_salinity,
-#         on=['site','datetime'],
-#         how='outer')
-#     .assign(station = lambda x: np.where(pd.notnull(x.station_x), x.station_x, x.station_y))
-#     )
-#
-# moneystump_df
-
+moneystump_waterheight = all_data.copy().sort_values(by=['datetime'])
 
 
 #----------------------------------------------------------------------------------
@@ -278,18 +215,12 @@ marblehead_erie_df = (
     .drop_duplicates()
     )
 
-
-# Fill 'water_height_m' and 'water_salinity' with 0s if the station name is Marblehead
-# df_filtered.loc[df_filtered['station'] == 'Marblehead', ['water_height_m', 'water_salinity']] = df_filtered.loc[df_filtered['station'] == 'Marblehead', ['water_height_m', 'water_salinity']].fillna(0)
-
 erie_hydro_df_cc =  (marblehead_erie_df.copy().assign(site = 'Crane Creek'))
 erie_hydro_df_owc = (marblehead_erie_df.copy().assign(site = 'Old Woman Creek'))
 erie_hydro_df_pr =  (marblehead_erie_df.copy().assign(site = 'Portage River'))
 
-
 # CONCATENATE REPEATED DFs
 erie_hydro_df_3sites = pd.concat([erie_hydro_df_cc, erie_hydro_df_owc, erie_hydro_df_pr], axis=0)
-
 
 
 #----------------------------------------------------------------------------------
@@ -320,10 +251,6 @@ df_wl = pd.concat([
         erie_hydro_df_3sites],
         axis=0)
 
-# gcrew_water_height_df
-# moneystump_salinity,
-
-
 df_wl = df_wl.rename(columns={'site':'site_name'})
 
 # Convert datatype
@@ -338,66 +265,3 @@ df_wl['water_salinity'] = df_wl['water_salinity'].apply(lambda x: max(x, 0))
 
 # Save DataFrame to CSV
 df_wl.to_csv('../../output/results/hydro_forcing_gauges/buoy_wl_all_syn_v4.csv', index=False)
-
-# df_wl.info()
-# df_wl.head()
-# df_wl.columns
-
-
-#----------------------------------------------------------------------------------
-# df_goodwin.columns = ['station','datetime','water_salinity','water_depth_m']
-# df_sweethall.columns = ['station','datetime','water_salinity','water_depth_m']
-# gcrew = gcrew[['station','datetime','gridcell','water_height_m','water_salinity']]
-# moneystump_salinity
-# moneystump_waterheight
-
-#
-# df_wl.station.unique()
-# # Top convert depth, we need:
-# # Ht above LMSL (meters)	6.271
-# boundary_wl_df = df_wl.copy()
-#
-# # Dictionary mapping old values to new labels
-# mapping = {
-#     'GoodwinIsland_CH019.38': 'Goodwin Islands',
-#     'SweetHallMarsh_PMK012.18': 'Sweet Hall Marsh',
-#     'GCREW': 'GCReW',
-#     'Moneystump': 'Moneystump Swamp'
-# }
-
-# # Use map() to replace the values in the 'Location' column and create a new column 'Label'
-# boundary_wl_df['site_name'] = boundary_wl_df['station'].map(mapping)
-# # Set a new zone_name for buoys
-# boundary_wl_df['zone_name'] = 'Tidal boundary; height (m)'
-
-
-
-# gw_depth_df
-# .assign(TIMESTAMP=lambda x: pd.to_datetime(x.TIMESTAMP),
-#         TIMESTAMP_hourly=lambda x: x.TIMESTAMP.dt.floor('h'))
-#
-# .drop(columns=['TIMESTAMP', 'Instrument_ID', 'F_OOB', 'F_OOS'])  # 'Sensor_ID', 'Location', 'ID',
-# .groupby(['Site', 'Plot', 'Instrument', 'TIMESTAMP_hourly'])  # , 'research_name'])  # 'Sensor_ID', 'Location',
-# .mean()
-# .reset_index()
-# # .drop(columns=['Value'])
-# )
-
-# # Concatenate date and time columns
-# all_data['datetime'] = all_data['Date'] + ' ' + all_data['Time (GMT)']
-#
-# # Convert to datetime
-# all_data['datetime'] = pd.to_datetime(all_data['datetime'])
-#
-#
-# all_data = all_data[['station','datetime', 'Verified (m)']]
-#
-# moneystump = all_data
-#
-# # Save the resulting DataFrame to a CSV file
-# all_data.to_csv('../../../output/results/gauges/Moneystump_CO-OPS_8577330_hourly.csv', index=False)
-
-
-
-# df_sweethall.to_csv('../../../output/results/gauges/SweetHallMarsh_PMK012.18_hourly.csv', index=False)
-# df_goodwin.to_csv('../../../output/results/gauges/GoodwinIsland_CH019.38_hourly.csv', index=False)

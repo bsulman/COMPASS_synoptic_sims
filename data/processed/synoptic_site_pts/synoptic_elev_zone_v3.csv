@@ -1,0 +1,22 @@
+region_id,region_name,site_id,site_name,zone_name,zone_id,zone_num,lat,long,dem_tile,dist,elev,elev_fromwetland
+CB,Chesapeake Bay,SWH,Sweet Hall Marsh,Wetland,W,3,37.566587,-76.897031,cb/Chesapeake_Bay_CoNED_K_04.tif,0,0.19412291,0
+CB,Chesapeake Bay,SWH,Sweet Hall Marsh,Transition,TR,2,37.568826,-76.896438,cb/Chesapeake_Bay_CoNED_K_04.tif,253.95,0.525308132,0.331185222
+CB,Chesapeake Bay,SWH,Sweet Hall Marsh,Upland,UP,1,37.570689,-76.895726,cb/Chesapeake_Bay_CoNED_K_04.tif,470.07,0.726908922,0.532786012
+CB,Chesapeake Bay,MSM,Moneystump Swamp,Wetland,W,3,38.430762,-76.228614,cb/Chesapeake_Bay_CoNED_H_07.tif,0,0.292810053,0
+CB,Chesapeake Bay,MSM,Moneystump Swamp,Transition,TR,2,38.430909,-76.227681,cb/Chesapeake_Bay_CoNED_H_07.tif,83.06,0.476162761,0.183352709
+CB,Chesapeake Bay,MSM,Moneystump Swamp,Upland,UP,1,38.431376,-76.226581,cb/Chesapeake_Bay_CoNED_H_07.tif,192.18,0.680754006,0.387943953
+CB,Chesapeake Bay,GWI,Goodwin Islands,Wetland,W,3,37.218901,-76.410094,cb/Chesapeake_Bay_CoNED_M_06.tif,0,0.679172575,0
+CB,Chesapeake Bay,GWI,Goodwin Islands,Transition,TR,2,37.219377,-76.409241,cb/Chesapeake_Bay_CoNED_M_06.tif,92.3,0.790806055,0.11163348
+CB,Chesapeake Bay,GWI,Goodwin Islands,Upland,UP,1,37.219244,-76.408673,cb/Chesapeake_Bay_CoNED_M_06.tif,144.82,1.032942653,0.353770077
+CB,Chesapeake Bay,GCW,GCReW,Wetland,W,3,38.874076,-76.552129,cb/Chesapeake_Bay_CoNED_F_06.tif,0,0.241999656,0
+CB,Chesapeake Bay,GCW,GCReW,Transition,TR,2,38.874473,-76.551469,cb/Chesapeake_Bay_CoNED_F_06.tif,140.08,1.214899778,0.972900122
+CB,Chesapeake Bay,GCW,GCReW,Upland,UP,1,38.874957,-76.549978,cb/Chesapeake_Bay_CoNED_F_06.tif,212.33,7.092357159,6.850357503
+LE,Lake Erie,PTR,Portage River,Wetland,W,3,41.50148,-83.04611,le/N1815665.img,1110.54,573.6900024,2.719970703
+LE,Lake Erie,PTR,Portage River,Transition,TR,2,41.502723,-83.045662,le/N1815665.img,641.3,575.5700073,1.880004883
+LE,Lake Erie,PTR,Portage River,Upland,UP,1,41.50174,-83.04372,le/N1815665.img,0,576.4099731,0
+LE,Lake Erie,OWC,Old Woman Creek,Wetland,W,3,41.376445,-82.509024,le/mosaic_BN19650622_BN19650622.tif,0,573.3699951,0
+LE,Lake Erie,OWC,Old Woman Creek,Transition,TR,2,41.376017,-82.507507,le/mosaic_BN19650622_BN19650622.tif,444.58,574.8900146,1.520019531
+LE,Lake Erie,OWC,Old Woman Creek,Upland,UP,1,41.37618,-82.50685,le/mosaic_BN19650622_BN19650622.tif,634.42,589.710022,16.34002686
+LE,Lake Erie,CRC,Crane Creek,Wetland,W,3,41.62185,-83.2389,le/N1765710.img,0,574.3300171,0
+LE,Lake Erie,CRC,Crane Creek,Transition,TR,2,41.62192,-83.23815,le/N1765710.img,206.64,574.4899902,0.159973145
+LE,Lake Erie,CRC,Crane Creek,Upland,UP,1,41.61524,-83.22889,le/N1765710.img,3718.87,574.8800049,0.549987793

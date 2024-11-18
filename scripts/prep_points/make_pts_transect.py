@@ -47,8 +47,8 @@ def make_pts_transect(gdf):
     return (line, multipoint)
 
 
-#
-#
+
+
 # #----------------------------------------------------------------
 # # Reread site coords with tile IDs
 #

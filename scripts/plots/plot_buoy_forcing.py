@@ -1,3 +1,19 @@
+# from plotnine import ggplot, aes, theme, geom_point, theme_minimal,  labs, geom_histogram, coord_flip, facet_wrap
+#/  Plot time series of water depth
+import numpy as np
+import pandas as pd
+from plotnine import *
+# import matplotlib as plt
+# THIS PREVENTS INTERACTIVE WINDOW ERROR:
+# "UserWarning: Starting a Matplotlib GUI outside of the main thread will likely fail."
+import matplotlib
+matplotlib.use('agg')
+from mizani.breaks import date_breaks
+from mizani.formatters import date_format
+# Prevent continuous warnings from plotnine drawing not working
+import warnings
+warnings.filterwarnings("ignore")
+
 
 
 # /-------------------------------------------------------------------------------
@@ -21,38 +37,16 @@ boundary_wl_df['water_height_m'] = pd.to_numeric(boundary_wl_df['water_height_m'
 boundary_wl_df['datetime'] = pd.to_datetime(boundary_wl_df['datetime'], errors='coerce')
 
 
-# ###  TO PLOT GEOM LINES, NEED TO ADD MISSING DATES TO PREVENT LINES OVER GAPS
-# df =  gw_depth_df.copy()
-# dates = pd.DataFrame()
-# # Create a complete range of hourly datetimes from min to max datetime in the DataFrame
-# dates['TIMESTAMP_hourly'] = pd.date_range(start=df['TIMESTAMP_hourly'].min(), end=df['TIMESTAMP_hourly'].max(), freq='h')
-# gw_depth_df = pd.concat([gw_depth_df, dates], axis=0)
-
-
 #----------------------------------------------------------------------------------
-# from plotnine import ggplot, aes, theme, geom_point, theme_minimal,  labs, geom_histogram, coord_flip, facet_wrap
-#/  Plot time series of water depth
-from plotnine import *
-# import matplotlib as plt
-# THIS PREVENTS INTERACTIVE WINDOW ERROR:
-# "UserWarning: Starting a Matplotlib GUI outside of the main thread will likely fail."
-import matplotlib
-matplotlib.use('agg')
-from mizani.breaks import date_breaks
-from mizani.formatters import date_format
-# Prevent continuous warnings from plotnine drawing not working
-import warnings
-warnings.filterwarnings("ignore")
 
 
 site_order = ['Crane Creek', 'Portage River','Old Woman Creek',
               'GCReW', 'Goodwin Islands', 'Moneystump Swamp', 'Sweet Hall Marsh']
 
 # Reorder sites for the facets
-# erie_hydro_df_3sites['site_name'] = pd.Categorical(erie_hydro_df_3sites['site_name'], categories=site_order, ordered=True)
 boundary_wl_df['site_name'] = pd.Categorical(boundary_wl_df['site_name'], categories=site_order, ordered=True)
-gw_depth_df['site_name'] = pd.Categorical(gw_depth_df['site_name'], categories=site_order, ordered=True)
-
+gw_depth_df['site_name']    = pd.Categorical(gw_depth_df['site_name'], categories=site_order, ordered=True)
+ground_elev['site_name']    = pd.Categorical(ground_elev['site_name'], categories=site_order, ordered=True)
 
 
 # /--------------------------------------------------------------------
@@ -127,51 +121,126 @@ gw_depth_df['site_name'] = pd.Categorical(gw_depth_df['site_name'], categories=s
 
 ground_elev = gw_depth_df.drop_duplicates(subset=['site_name','zone_name','elev_m'])
 
-erie_hydro_df_3sites['buoy_name'] = 'Hydro boundary'
+# erie_hydro_df_3sites['buoy_name'] = 'Hydro boundary'
 boundary_wl_df['zone_name'] = 'Hydro boundary'
 
-zone_order = ['Hydro boundary',  'Wetland', 'Transition', 'Upland']
+
+
+import itertools
+# Generate all combinations of colors and sizes
+combinations = list(itertools.product(ground_elev.site_name, ground_elev.zone_name))
+# Create a DataFrame from the combinations
+combinations = pd.DataFrame(combinations, columns=['site_name', 'zone_name'])
+
+
+# Order transect zones for plotting
+zone_order = ['Upland', 'Transition', 'Wetland']#, 'Hydro boundary']
 gw_depth_df['zone_name'] = pd.Categorical(gw_depth_df['zone_name'], categories=zone_order, ordered=True)
 ground_elev['zone_name'] = pd.Categorical(ground_elev['zone_name'], categories=zone_order, ordered=True)
 
 
+#%% Add missing combinations of sites-zones for plotting to work.
+addons = pd.DataFrame({'site_name': ['GCReW', 'Old Woman Creek'],
+                       'zone_name': ['Upland', 'Upland'],
+                       'elev_m': [np.nan, np.nan]})
+
+ground_elev = pd.concat([ground_elev, addons], axis=0)
+
+
+
+# Plot
 (
     ggplot()
 
-    #Plot Erie buoys water HEIGHT
-    + geom_violin(erie_hydro_df_3sites,
-                aes( y='tide_height_m', color='buoy_name', fill='buoy_name'),
-                  style='right', size = 0.2)
+    # # Plot ground surface elevation
+    + geom_bar(ground_elev,
+               aes(x='zone_name', y='elev_m'),
+               stat='identity',
+               width=0.99,
+               size=0, fill='#cccccc', color='#FFFFFF')
 
-    # Plot CB buoys water HEIGHT
-    + geom_violin(boundary_wl_df,
-                aes(x='zone_name', y='tide_height', color='zone_name', fill='zone_name'),
-                  style='right', size = 0.2)
+    # Plot negative ground surface elevation
+    + geom_bar(ground_elev[ground_elev['elev_m'].notna()],
+               aes(x='zone_name', y=-1),
+               stat='identity',
+               width=0.99,
+               size=0, fill='#cccccc', color='#FFFFFF')
+
+    # # Plot buoys water HEIGHT
+    # + geom_violin(boundary_wl_df,
+    #             aes(x='zone_name', y='water_height_m', fill='zone_name'),
+    #               style='right', size = 0)
 
     # Plot in synoptic wells WTD - DEPTH
     + geom_violin(gw_depth_df,
-               aes(x='zone_name', y='gw_elev_m', color='zone_name', fill='zone_name'),
-                  style='right', size = 0.2)
-
-    # Plot ground surface elevation
-    + geom_point(ground_elev,
-                  aes(x='zone_name', y='elev_m'),
-                 shape='_', size=6, color='#000000')
+               aes(x='zone_name', y='gw_elev_m'),
+                  color='#0003bd', fill='#0003bd',
+                  size = 0.2,
+                  style='right', width=1.5)
 
     + labs(x='', y='Water Elevation (NAVD88, m)')
-    + facet_wrap("site_name", scales="free", ncol=3)
+    + facet_wrap("site_name", scales="free", ncol=1)
 
+    + scale_x_discrete(breaks=['Upland', 'Transition', 'Wetland'])# , 'Hydro boundary'])
+    + scale_y_continuous(limits=[-1, 1], expand=[0,0])
+    # limits=[
+    #         max(max(ground_elev.elev_m), max(boundary_wl_df.water_height_m)),
+    #         min(min(ground_elev.elev_m), min(boundary_wl_df.water_height_m))
+    #         ])
     + guides(color=guide_legend(title=""))
-    + theme_bw()
-    + theme(legend_position= (0.8, 0.1), #'none',
+    + theme_classic()
+    + theme(legend_position= 'none', # (0.8, 0.1),
             panel_grid_major=element_blank(),
             panel_grid_minor=element_blank())
 
-    ).save('../../output/figures/in_situ_wl_all_ts_15_violin.png',
-       width=12, height=8, dpi=300, verbose = False)
+    ).save('../../output/figures/in_situ_wl_all_ts_violin_v23.png',
+       width=4, height=20, dpi=300, verbose = False)
 
 
 
+
+
+
+# /--------------------------------------------------------------------
+#/   PLOT ELEVATION
+(
+    ggplot()
+    # Plot CB buoys water HEIGHT
+    + geom_line(#boundary_wl_df,
+                boundary_wl_df.dropna(subset=['water_height_m']),
+                aes(x='datetime', y='water_height_m', color='zone_name'), size=0.15)
+
+    # # Plot in synoptic wells WTD - DEPTH
+    # + geom_line(gw_depth_df,
+    #            aes(x='TIMESTAMP_hourly', y='gw_elev_m', color='zone_name'), size=0.2)
+
+
+    + scale_x_datetime(breaks=date_breaks('2 year'), labels=date_format('%Y'))
+    + labs(x='', y='Water Elevation (NAVD88, m)')
+    + facet_wrap("site_name", scales="free", ncol=1)
+
+    + scale_y_continuous(limits=[-1, 1], expand=[0,0])
+    + guides(color=guide_legend(title=""))
+    + theme_classic()
+    + theme(#legend_position= (0.8, 0.1), #'none',
+            legend_position= 'none',
+            panel_grid_major=element_blank(),
+            panel_grid_minor=element_blank())
+            # axis_text_x=element_text(rotation=90, hjust=1))
+
+    ).save('../../output/figures/in_situ_hydroforcing_ts_v23.png',
+       width=4, height=20, dpi=300, verbose = False)
+
+
+
+
+#----------------------------------------------------------------------------------
+# ###  TO PLOT GEOM LINES, NEED TO ADD MISSING DATES TO PREVENT LINES OVER GAPS
+# df =  gw_depth_df.copy()
+# dates = pd.DataFrame()
+# # Create a complete range of hourly datetimes from min to max datetime in the DataFrame
+# dates['TIMESTAMP_hourly'] = pd.date_range(start=df['TIMESTAMP_hourly'].min(), end=df['TIMESTAMP_hourly'].max(), freq='h')
+# gw_depth_df = pd.concat([gw_depth_df, dates], axis=0)
 
 #----------------------------------------------------------------------------------
 # Read in buoy forcing data
