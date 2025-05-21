@@ -1,34 +1,15 @@
-import xarray
+import xarray,pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
 # Set up an ELM domain for seven sites across 2 regions x 3 points (upland, transition, wetland)
 
-landcover_types=[
-    'Upland',
-    'Transition',
-    'Wetland'
-]
-
-regions=[
-    'Lake Erie',
-    'Chesapeake'
-]
-
-sites=[
-    'SERC',
-    'Sweethall',
-    'Goodwin Island',
-    'Moneystump',
-    'Portage River',
-    'Old Woman Creek',
-    'Crane Creek',
-    ]
-
-grid_points=[]
-for site in sites:
-    for point in landcover_types:
-        grid_points.append(site+'_'+point)
+synoptic = \
+    (pd.read_csv('../data/raw/transect_coords/compass_synoptic.csv')
+    .assign(grid_points = lambda x: x.site_id + '_' + x.zone_id)
+    .assign(site_cat = 'synoptic')
+    .drop(columns=['distance'])
+     )
 
 # For now we are setting up each land cover type as a separate grid cell. 
 # In the future we could do some of this using topo units within grid cells
@@ -37,19 +18,22 @@ for site in sites:
 # Hourly time series, just do one year and the model will repeat it. Currently using water level of zero. 
 # Surface data set below will define ground surface height above drainage to give different hydrological conditions
 # Two grid cells (trough and high centered polygon)
+grid_points=synoptic['grid_points']
 num_grids=len(grid_points)
 
-if __name__ == '__main__':
-    # These are different lengths. Erie starts in 1987 but data before that is a harmonic fit
-    # Anapolis starts in 1984
-    Erie_hydro=xarray.open_dataset('hydro_forcing/LakeErie_Gageheight_0salt.nc',decode_times=False)
-    # Annapolis hydro has a short linear gap filling spot in it that we might want to fix
-    Annapolis_hydro=xarray.open_dataset('hydro_forcing/Annapolis_schismPlus2_Peter_salinity_WT6_1_39yrs_NAVD.nc',decode_times=False)
+elevations=pd.read_csv('../data/synoptic_elev_zone_v3.csv')
 
-    ntimes=len(Annapolis_hydro['time'])
+if __name__ == '__main__':
+    gw=pd.read_csv('../../Data/synoptic_gw_elev_v4.csv',parse_dates=['TIMESTAMP_hourly'],index_col=['site_id','zone_id','TIMESTAMP_hourly'])
+    obs_waterlevel=gw['wl_below_surface_m']
+    obs_salinity=gw['gw_salinity']
+
+    # Will need to extend to whole years and gap fill. If we backfill beginning and end, we can do 2022-2024 (3 full years gap filled)
+    ntimes=365*24*(obs_waterlevel.reset_index()['TIMESTAMP_hourly'].max().year-obs_waterlevel.reset_index()['TIMESTAMP_hourly'].min().year+1)
+
     tide_data_multicell=xarray.Dataset(
-        data_vars={'tide_height':xarray.Variable(('time','gridcell'),data=np.zeros((ntimes,num_grids))+0.1,attrs={'units':'m'}),
-                'tide_salinity':xarray.Variable(('time','gridcell'),data=np.zeros((ntimes,num_grids)),attrs={'units':'ppt'}),
+        data_vars={'tide_height':xarray.Variable(('time','gridcell'),data=np.zeros((ntimes,num_grids))+np.nan,attrs={'units':'m'}),
+                'tide_salinity':xarray.Variable(('time','gridcell'),data=np.zeros((ntimes,num_grids))+np.nan,attrs={'units':'ppt'}),
                 # Setting nonzero nitrate so leaching doesn't become a problem
                 'tide_nitrate':xarray.Variable(('time','gridcell'),data=np.zeros((ntimes,num_grids))+0.3e-3,attrs={'units':'mol/L'}),
                 },
@@ -58,14 +42,71 @@ if __name__ == '__main__':
         attrs    ={'Description':'Hydrological boundary conditions for grid cells'}
     )
 
-    for site in grid_points:
-        if site.split('_')[0] in ['SERC','Sweethall','Goodwin Island','Moneystump']:
-            # Adding 30 cm to Annapolis water level since it seems too low
-            tide_data_multicell['tide_height'][:,grid_points.index(site)]=np.array(Annapolis_hydro['tide_height'][:,0])+0.3
-            tide_data_multicell['tide_salinity'][:,grid_points.index(site)]=np.array(Annapolis_hydro['tide_salinity'][:,0])
+
+    for sitenum in range(len(grid_points)):
+        if (synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]) in obs_waterlevel and obs_waterlevel[(synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum])].any():
+            dt=obs_waterlevel[synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]].index-obs_waterlevel.reset_index()['TIMESTAMP_hourly'].min()
+            t_inds=dt.total_seconds().astype(int)//3600
+            tide_data_multicell['tide_height'][t_inds,sitenum]=obs_waterlevel[synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]]
+            tide_data_multicell['tide_salinity'][t_inds,sitenum]=obs_salinity[synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]]
+        elif synoptic['zone_id'][sitenum]=='UP' and (synoptic['site_id'][sitenum],'TR') in obs_waterlevel:
+            dt=obs_waterlevel[synoptic['site_id'][sitenum],'TR'].index-plt.matplotlib.dates.datetime.datetime(2022,1,1)
+            tide_data_multicell['tide_height'][t_inds,sitenum]=obs_waterlevel[synoptic['site_id'][sitenum],'TR']-(elevations['elev'][sitenum]-elevations['elev'][sitenum-1])
+            tide_data_multicell['tide_salinity'][t_inds,sitenum]=obs_salinity[synoptic['site_id'][sitenum],'TR']
+            print(f'{(synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum])} not in obs_waterlevel. Using adjusted TR water level')
         else:
-            tide_data_multicell['tide_height'][:,grid_points.index(site)]=np.array(Erie_hydro['tide_height'][-ntimes:,0])
-            tide_data_multicell['tide_salinity'][:,grid_points.index(site)]=np.array(Erie_hydro['tide_salinity'][-ntimes:,0])
+            print(f'{(synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum])} not in obs_waterlevel')
+            continue
+
+    # Remove unrealistic salinity (only occurs in PTR)
+    tide_data_multicell['tide_salinity']=tide_data_multicell['tide_salinity'].where((tide_data_multicell['tide_salinity']<=32)&(tide_data_multicell['tide_salinity']>0.002))
+    # Remove spikes
+    tide_data_multicell['tide_height'][1:,:]=tide_data_multicell['tide_height'][1:,:].where(abs(tide_data_multicell['tide_height'].diff(dim='time'))<0.5)
+    
+    # Gap fill with interpolation
+    # To do: Make a figure and stats for how much gap filling we did
+    for sitenum in range(len(grid_points)):
+        start=tide_data_multicell['tide_height'].isel(gridcell=sitenum).dropna(dim='time')['time'][0].item()
+        end=tide_data_multicell['tide_height'].isel(gridcell=sitenum).dropna(dim='time')['time'][-1].item()
+        tide_data_multicell['tide_height'][start:end,sitenum] = tide_data_multicell['tide_height'][start:end,sitenum].interpolate_na(dim='time',max_gap=5000,method='spline')
+        start=tide_data_multicell['tide_salinity'].isel(gridcell=sitenum).dropna(dim='time')['time'][0].item()
+        end=tide_data_multicell['tide_salinity'].isel(gridcell=sitenum).dropna(dim='time')['time'][-1].item()
+        tide_data_multicell['tide_salinity'][start:end,sitenum] = tide_data_multicell['tide_salinity'][start:end,sitenum].interpolate_na(dim='time',max_gap=5000,method='spline')
+
+        # Fill big gaps with next closest transect point?
+        if synoptic['zone_id'][sitenum]=='W':
+            # Fill wetland with transition
+            tide_data_multicell['tide_height'][:,sitenum]=tide_data_multicell['tide_height'].isel(gridcell=sitenum).fillna(tide_data_multicell['tide_height'].isel(gridcell=sitenum+1)+(tide_data_multicell['tide_height'].isel(gridcell=sitenum).mean()-tide_data_multicell['tide_height'].isel(gridcell=sitenum+1).mean()))
+        if synoptic['zone_id'][sitenum]=='TR':
+            # Fill transition with wetland
+            tide_data_multicell['tide_height'][:,sitenum]=tide_data_multicell['tide_height'].isel(gridcell=sitenum).fillna(tide_data_multicell['tide_height'].isel(gridcell=sitenum-1)+(tide_data_multicell['tide_height'].isel(gridcell=sitenum).mean()-tide_data_multicell['tide_height'].isel(gridcell=sitenum-1).mean()))
+        if synoptic['zone_id'][sitenum]=='UP':
+            # Fill upland with transition
+            tide_data_multicell['tide_height'][:,sitenum]=tide_data_multicell['tide_height'].isel(gridcell=sitenum).fillna(tide_data_multicell['tide_height'].isel(gridcell=sitenum-1)+(tide_data_multicell['tide_height'].isel(gridcell=sitenum).mean()-tide_data_multicell['tide_height'].isel(gridcell=sitenum-1).mean()))
+
+    # Then with ensemble average
+    tide_data_multicell['tide_height']=tide_data_multicell['tide_height'].fillna(np.concat([tide_data_multicell['tide_height'].groupby(tide_data_multicell['time']%(365*24)).mean(skipna=True)]*5))
+    tide_data_multicell['tide_salinity']=tide_data_multicell['tide_salinity'].fillna(np.concat([tide_data_multicell['tide_salinity'].groupby(tide_data_multicell['time']%(365*24)).mean(skipna=True)]*5))
+
+    # Still some nulls remaining in OWC salinity after all this
+    tide_data_multicell['tide_salinity'] = tide_data_multicell['tide_salinity'].interpolate_na(dim='time',max_gap=None,method='spline')
+
+    f,a=plt.subplots(num='Forcing',nrows=2,ncols=7,clear=True)
+    for sitenum in range(len(grid_points)):
+        tide_data_multicell['tide_height'].isel(gridcell=sitenum).plot(ax=a[0,sitenum//3],label=synoptic['zone_id'][sitenum])
+        a[0,sitenum//3].set_title(synoptic['site_id'][sitenum])
+        tide_data_multicell['tide_salinity'].isel(gridcell=sitenum).plot(ax=a[1,sitenum//3],label=synoptic['zone_id'][sitenum])
+        a[1,sitenum//3].set_title(synoptic['site_id'][sitenum])
+    a[0,0].legend()
+
+
+    
+
+        # if (synoptic['zone_id'][sitenum]=='UP') and t_inds[0]>8760:
+        #     tide_data_multicell['tide_height'][0:t_inds[0],sitenum] = tide_data_multicell['tide_height'][:,sitenum].mean()
+        # else:
+        #     tide_data_multicell['tide_height'][0:t_inds[0],sitenum] = tide_data_multicell['tide_height'][365*24:365*24+t_inds[0],sitenum].values
+        
 
     # f,a=plt.subplots(nrows=2,num='Tide forcing',clear=True)
     # for n,site in enumerate(grid_points):
@@ -78,77 +119,72 @@ if __name__ == '__main__':
     # Long term solution is to use topo units, but will need to figure a way to do hydro forcing in that framework
     # Here we start from the single grid cell configuration for the site and then multiply it into multiple grid cells
 
-    domain_threecol=xarray.open_dataset('surface_data/domain_3col.nc')
-    surfdata_threecol=xarray.open_dataset('surface_data/surfdata_3col.nc')
-    surfdata_onecol=xarray.open_dataset('surface_data/surfdata_1x1pt_US-GC_TransTEMPEST_c20230901.nc')
-    # landuse_onecol=xarray.open_dataset(f'/nfs/data/ccsi/proj-shared/E3SM/pt-e3sm-inputdata/atm/datm7/GSWP3_daymet/cpl_bypass_{site}/surfdata.pftdyn.nc')
+    # Ran this on baseline: 
+    # python makepointdata.py --point_list ../../COMPASS_synoptic_sims/data/raw/transect_coords/compass_synoptic2.txt --nopftdyn --point_area_kmxkm 0.1 --ccsm_input=/gpfs/wolf2/cades/cli185/world-shared/e3sm/inputdata --keep_duplicates
+    domain_multicell=xarray.open_dataset('../surface_data/domain_synoptic_OLMT.nc')
+    surfdata_multicell=xarray.open_dataset('../surface_data/surfdata_synoptic_OLMT.nc')
 
-    # Change this with GPS coordinates for all actual sites
-    import pandas
-    site_data=pandas.read_csv('surface_data/COMPASS_sites.csv',na_values=['NA ','NAN']).replace(
-        {'gcrew':'SERC',
-        'sweethall':'Sweethall',
-        'goodwin':'Goodwin Island',
-        'moneystump':'Moneystump',
-        'ow_creek':'Old Woman Creek',
-        'portage_river':'Portage River',
-        'crane_creek':'Crane Creek',
-        'upland':'Upland','trans':'Transition','wetland':'Wetland'},
-        )
+    # for n,site_point in enumerate(grid_points):
+    #     site,point=site_point.split('_')
+    #     lat=synoptic['lat'][n].astype(float).item()
+    #     lon=synoptic['long'][n].astype(float).item()
+    #     domain_multicell['yc'][0,n]=lat
+    #     if lon>0:
+    #         domain_multicell['xc'][0,n]=lon
+    #     else:
+    #         domain_multicell['xc'][0,n]=lon+360
 
-    # Threecol is 3 points along transect, multiplying by number of sites for sites x 3 total points
-    domain_multicell=xarray.concat([domain_threecol]*len(sites),dim='ni')
-    # Assume all grid cells are the same size.
-    cell_width=0.02
+    # domain_multicell['xv'][0,:,[0,2]] =  domain_multicell['xc'].T.squeeze() + cell_width/2
+    # domain_multicell['xv'][0,:,[1,3]] =  domain_multicell['xc'].T.squeeze() - cell_width/2
+    # domain_multicell['yv'][0,:,[0,2]] =  domain_multicell['yc'].T.squeeze() + cell_width/2
+    # domain_multicell['yv'][0,:,[1,3]] =  domain_multicell['yc'].T.squeeze() - cell_width/2
 
-    for n,site_point in enumerate(grid_points):
-        site,point=site_point.split('_')
-        lat=site_data[(site_data['site']==site)&(site_data['zone']==point)]['lat'].astype(float).item()
-        lon=site_data[(site_data['site']==site)&(site_data['zone']==point)]['long'].astype(float).item()
-        domain_multicell['yc'][0,n]=lat
-        if lon>0:
-            domain_multicell['xc'][0,n]=lon
-        else:
-            domain_multicell['xc'][0,n]=lon+360
+    # surfdata_multicell['LONGXY'][:]=domain_multicell['xc'].values
+    # surfdata_multicell['LATIXY'][:]=domain_multicell['yc'].values
 
-    domain_multicell['xv'][0,:,[0,2]] =  domain_multicell['xc'].T.squeeze() + cell_width/2
-    domain_multicell['xv'][0,:,[1,3]] =  domain_multicell['xc'].T.squeeze() - cell_width/2
-    domain_multicell['yv'][0,:,[0,2]] =  domain_multicell['yc'].T.squeeze() + cell_width/2
-    domain_multicell['yv'][0,:,[1,3]] =  domain_multicell['yc'].T.squeeze() - cell_width/2
+    surfdata_multicell['ht_above_stream'] = surfdata_multicell['TOPO']*0.0 # Set at zero since water levels are being supplied relative to surface
+    surfdata_multicell['dist_from_stream'] = surfdata_multicell['ht_above_stream']*0.0+1.0
+    # OWC and SWH upland water levels are not in the data so let's just ignore them
+    surfdata_multicell['dist_from_stream'][list(grid_points).index('OWC_UP')] = 100.0
+    surfdata_multicell['dist_from_stream'][list(grid_points).index('SWH_UP')] = 100.0
+    # Model water balance issue with CRC upland
+    surfdata_multicell['dist_from_stream'][list(grid_points).index('CRC_UP')] = 50.0
 
-    surfdata_multicell = xarray.concat([surfdata_onecol]*len(sites)*3,dim='lsmlon',data_vars='minimal')
-    surfdata_multicell['LONGXY'][:]=domain_multicell['xc'].values
-    surfdata_multicell['LATIXY'][:]=domain_multicell['yc'].values
-    surfdata_multicell['ht_above_stream'] = surfdata_multicell['TOPO']
-    surfdata_multicell['dist_from_stream'] = surfdata_multicell['ht_above_stream']*0.0
-
-    # Add new surface data fields specific to gridded hydrological forcing
-    # Let's define land surface heights relative to the trough
-    # ht_above_stream in meters units
-    elevs=site_data['elevation']
-    elevs=elevs.where((site_data['zone']=='Wetland')&(elevs.isna()),-5.0)
-
-    for n,site_point in enumerate(grid_points):
-        site,point=site_point.split('_')
-        surfdata_multicell['ht_above_stream'].squeeze()[n]=site_data[(site_data['site']==site)&(site_data['zone']==point)]['elevation'].item()
-        surfdata_multicell['dist_from_stream'].squeeze()[n]=site_data[(site_data['site']==site)&(site_data['zone']==point)]['distance'].item()
-        
-
-        
-    # surfdata_multicell['ht_above_stream'] = surfdata_multicell['TOPO']-surfdata_multicell['TOPO'][0]
-    # Here we specify the height of the polygon relative to the "zero" point in the hydrological forcing (in meters)
-
-    # This should just be distance along the transect
-    # surfdata_multicell['dist_from_stream'] = surfdata_multicell['ht_above_stream']*0.0 + 1.0
 
     # We can change soil texture including organic content which is important for hydrological and thermal properties
     # that contribute to active layer thickness
-    # BEO surface data already includes different organic matter percentages
+    ## Reminder to look through soil data that people compiled for this!
+    kaizad_soildata=pd.read_csv('../../Data/cmps-soil_characterization/1-data/processed/chemistry_combined_all_horizons.csv')
+    OMfrac=kaizad_soildata.groupby(['name','site','transect','horizon'])['value'].mean().loc['percentOM'].rename({'upland':'UP','transition':'TR','wetland':'W'})/100
+    mod_depths=xarray.open_dataset('../../model_results/COMPASS_synoptic_US-GC3_ICB20TRCNRDCTCBC.elm.h0.1990-01-01-00000.nc')['levdcmp']
+    organic_max=130.0
+    def find_depthpoint(z):
+        return abs(mod_depths-z).argmin().item()
+    # Don't have depth data yet so I'm just going to assume O is 5 cm and A is 10 cm and B is 20 cm
+    for sitenum in range(len(grid_points)):
+        if (synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]) in OMfrac:
+            depth=0.0
+            if 'O' in OMfrac[ (synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum])]:
+                surfdata_multicell['ORGANIC'][0:find_depthpoint(0.05),sitenum]=organic_max*OMfrac[ (synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum],'O')]
+                depth=0.05
+                print((synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum],'O'))
+            if 'A' in OMfrac[ (synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum])]:
+                d1=find_depthpoint(depth)
+                d2=find_depthpoint(depth+0.1)
+                surfdata_multicell['ORGANIC'][d1:d2,sitenum]=organic_max*OMfrac[ (synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum],'A')]
+                depth=depth+0.1
+                print((synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum],'A'))
+            if 'B' in OMfrac[ (synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum])]:
+                d1=find_depthpoint(depth)
+                d2=find_depthpoint(depth+0.2)
+                surfdata_multicell['ORGANIC'][d1:d2,sitenum]=organic_max*OMfrac[ (synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum],'B')]
+                depth=depth+0.2
+                print((synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum],'B'))
     # surfdata_multicell['ORGANIC'][...] = surfdata_multicell['ORGANIC'][...]*3.0
     # surfdata_multicell['PCT_SAND'][...] = 75.0
     # surfdata_multicell['PCT_CLAY'][...] = 15.0
     # fdrain controls the relationship between water table depth and topographic drainage
-    surfdata_multicell['fdrain']=surfdata_multicell['dist_from_stream']*0.0 + 5.0
+    surfdata_multicell['fdrain']=surfdata_multicell['dist_from_stream']*0.0 + 2.5
 
     # Change PFTs to match different ecosystems. This is the list of default ELM PFTs
     pftnames = [s.strip() for s in [
@@ -182,66 +218,28 @@ if __name__ == '__main__':
     for n,site_point in enumerate(grid_points):
 
         site,point=site_point.split('_')
-        pointdata=site_data[(site_data['site']==site)&(site_data['zone']==point)]
+        pointdata=synoptic.iloc[n]
 
-        surfdata_multicell['PCT_NAT_PFT'].squeeze()[:,n]=0.0
-        surfdata_multicell['PCT_NAT_PFT'].squeeze()[pftnames.index('needleleaf_evergreen_temperate_tree'),n]=pointdata['NET_temperate'].item()
-        surfdata_multicell['PCT_NAT_PFT'].squeeze()[pftnames.index('broadleaf_deciduous_temperate_tree'),n]=pointdata['BDT_temperate'].item()
-        surfdata_multicell['PCT_NAT_PFT'].squeeze()[pftnames.index('broadleaf_evergreen_shrub'),n]=pointdata['BES_temperate'].item()
-        surfdata_multicell['PCT_NAT_PFT'].squeeze()[pftnames.index('broadleaf_deciduous_temperate_shrub'),n]=pointdata['BDS_temperate'].item()
-        surfdata_multicell['PCT_NAT_PFT'].squeeze()[pftnames.index('c3_non-arctic_grass'),n]=pointdata['C3_grass'].item()
-        surfdata_multicell['PCT_NAT_PFT'].squeeze()[pftnames.index('c4_grass'),n]=pointdata['C4_grass'].item()
+        surfdata_multicell['PCT_NAT_PFT'][:,n]=0.0
+        surfdata_multicell['PCT_NAT_PFT'][pftnames.index('needleleaf_evergreen_temperate_tree'),n]=pointdata['NET_temperate'].item()
+        surfdata_multicell['PCT_NAT_PFT'][pftnames.index('broadleaf_evergreen_temperate_tree'),n]=pointdata['BET_temperate'].item()
+        surfdata_multicell['PCT_NAT_PFT'][pftnames.index('broadleaf_deciduous_temperate_tree'),n]=pointdata['BDT_temperate'].item()
+        surfdata_multicell['PCT_NAT_PFT'][pftnames.index('broadleaf_evergreen_shrub'),n]=pointdata['BES_temperate'].item()
+        surfdata_multicell['PCT_NAT_PFT'][pftnames.index('broadleaf_deciduous_temperate_shrub'),n]=pointdata['BDS_temperate'].item()
+        surfdata_multicell['PCT_NAT_PFT'][pftnames.index('c3_non-arctic_grass'),n]=pointdata['C3_grass'].item()
+        surfdata_multicell['PCT_NAT_PFT'][pftnames.index('c4_grass'),n]=pointdata['C4_grass'].item()
 
-        
+    # surfdata_multicell['PCT_NAT_PFT'] = surfdata_multicell['PCT_NAT_PFT'].round(3)
+    # surfdata_multicell['PCT_NAT_PFT'][surfdata_multicell['PCT_NAT_PFT'].argmax(dim='natpft'),:] = surfdata_multicell['PCT_NAT_PFT'][surfdata_multicell['PCT_NAT_PFT'].argmax(dim='natpft'),:] + surfdata_multicell['PCT_NAT_PFT'].sum(dim='natpft')-100
 
     # PFT percents are required to sum to 100 in each grid cell or the model will crash
     if (surfdata_multicell['PCT_NAT_PFT'].sum(dim='natpft')!=100).any():
         raise ValueError('PFTs do not all add up to 100')
 
+    # Model crashes if mxsoil_color is an array and not an integer
+    surfdata_multicell['mxsoil_color']=surfdata_multicell['mxsoil_color'][0]
+    surfdata_multicell['mxsoil_order']=surfdata_multicell['mxsoil_order'][0]
 
-    tide_data_multicell.to_netcdf('COMPASS_hydro_BC_multicell.nc')
-    surfdata_multicell.to_netcdf('COMPASS_surfdata_multicell.nc')
-    domain_multicell.to_netcdf('COMPASS_domain_multicell.nc')
-
-    import matplotlib.pyplot as plt
-    f,a=plt.subplots(num='Water heights',clear=True,nrows=2)
-    a[0].plot(np.arange(len(grid_points)),surfdata_multicell['ht_above_stream'].squeeze(),ls='-',lw=5.0,color='brown',label='Soil surface',drawstyle='steps-mid')
-    a[0].plot(np.arange(len(grid_points)),tide_data_multicell['tide_height'].mean(dim='time'),color='b',alpha=0.5,lw=2.0,label='Mean water level',drawstyle='steps-mid')
-    # a.axhline(tide_data_multicell['tide_height'].quantile(0.9),color='b',alpha=0.5,ls='--',label='90th percentile water level')
-    # a.axhline(tide_data_multicell['tide_height'].quantile(0.1),color='b',alpha=0.5,ls='--',label='10th percentile water level')
-    a[0].fill_between(np.arange(len(grid_points)),tide_data_multicell['tide_height'].quantile(0.1,dim='time'),tide_data_multicell['tide_height'].quantile(0.9,dim='time'),color='b',alpha=0.5,label='Water level',step='mid')
-
-    a[0].set_ylabel('Height (m)')
-    a[0].set(xlim=(0.,len(grid_points)-1.0),title='Site elevations')
-    # a.legend()
-
-    bottom=np.zeros(len(grid_points))
-    pftnum=0
-    for pft in range(surfdata_multicell['PCT_NAT_PFT'].shape[0]):
-        if surfdata_multicell['PCT_NAT_PFT'][pft,:].any():
-            pftfrac=surfdata_multicell['PCT_NAT_PFT'][pft,:].squeeze()
-            a[1].bar(np.arange(len(bottom)),pftfrac,bottom=bottom,color='C%d'%pftnum,label=pftnames[pft],align='center')
-            bottom=bottom+pftfrac
-            pftnum = pftnum + 1
-    a[1].legend()
-    a[1].set(xlim=(0.,len(grid_points)-1.0),title='Site vegetation')
-    a[1].set_xticks(np.arange(len(grid_points)))
-    a[1].set_xticklabels(grid_points,rotation=90)
-    a[0].set_xticks([])
-
-    f,a=plt.subplots(num='Water time series',nrows=2,clear=True)
-    a[0].plot(tide_data_multicell['time']/(24*365),tide_data_multicell['tide_height'][:,0],c='b')
-    a[0].axhline(surfdata_multicell['ht_above_stream'].squeeze()[0],ls='--',c='C1',lw=4.0,label='Upland')
-    a[0].axhline(surfdata_multicell['ht_above_stream'].squeeze()[1],ls='--',c='C2',lw=4.0,label='Transition')
-    a[0].axhline(surfdata_multicell['ht_above_stream'].squeeze()[2],ls='--',c='C3',lw=4.0,label='Wetland')
-    a[0].set(title='Chesapeake',xlabel='Time (years)',ylabel='Water level (m)')
-    a[0].legend()
-
-    a[1].plot(tide_data_multicell['time']/(24*365),tide_data_multicell['tide_height'][:,-1],c='b')
-    a[1].axhline(surfdata_multicell['ht_above_stream'].squeeze()[-3],c='C1',ls='--',lw=4.0)
-    a[1].axhline(surfdata_multicell['ht_above_stream'].squeeze()[-2],c='C2',ls='--',lw=4.0)
-    a[1].axhline(surfdata_multicell['ht_above_stream'].squeeze()[-1],c='C3',ls='--',lw=4.0)
-    a[1].set(title='Lake Erie',xlabel='Time (years)',ylabel='Water level (m)')
-
-
-    plt.show()
+    tide_data_multicell.to_netcdf('COMPASS_hydro_BC_fromgw.nc')
+    surfdata_multicell.to_netcdf('COMPASS_surfdata_fromgw.nc')
+    domain_multicell.to_netcdf('COMPASS_domain_multicell_fromgw.nc')
