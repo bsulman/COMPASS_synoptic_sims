@@ -1,6 +1,7 @@
 import xarray,pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import glob
 
 # Set up an ELM domain for seven sites across 2 regions x 3 points (upland, transition, wetland)
 
@@ -29,7 +30,9 @@ if __name__ == '__main__':
     obs_salinity=gw['gw_salinity']
 
     # Will need to extend to whole years and gap fill. If we backfill beginning and end, we can do 2022-2024 (3 full years gap filled)
-    ntimes=365*24*(obs_waterlevel.reset_index()['TIMESTAMP_hourly'].max().year-obs_waterlevel.reset_index()['TIMESTAMP_hourly'].min().year+1)
+    start_year=2022
+    end_year=2025
+    ntimes=365*24*(end_year-start_year+1)
 
     tide_data_multicell=xarray.Dataset(
         data_vars={'tide_height':xarray.Variable(('time','gridcell'),data=np.zeros((ntimes,num_grids))+np.nan,attrs={'units':'m'}),
@@ -44,19 +47,41 @@ if __name__ == '__main__':
 
 
     for sitenum in range(len(grid_points)):
-        if (synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]) in obs_waterlevel and obs_waterlevel[(synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum])].any():
-            dt=obs_waterlevel[synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]].index-obs_waterlevel.reset_index()['TIMESTAMP_hourly'].min()
-            t_inds=dt.total_seconds().astype(int)//3600
-            tide_data_multicell['tide_height'][t_inds,sitenum]=obs_waterlevel[synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]]
-            tide_data_multicell['tide_salinity'][t_inds,sitenum]=obs_salinity[synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]]
+        # Read from COMPASS L2 data (which is gap filled)
+        waterlevel_files=sorted(glob.glob(f'../../Data/L2 data/v2-0/{synoptic['site_id'][sitenum]:s}_????/{synoptic['site_id'][sitenum]:s}_{synoptic['zone_id'][sitenum]:s}_????_gw-wl-below-surface_L2_v2-0.parquet'))
+        if len(waterlevel_files)>0:
+            waterlevels=pd.concat([pd.read_parquet(f).set_index('TIMESTAMP')['Value_GF_MAC'].resample('1h').mean() for f in waterlevel_files])
+            waterlevels=waterlevels[~((waterlevels.index.month==2)&(waterlevels.index.day==29))]
+            tide_data_multicell['tide_height'][(waterlevels.index[0].year-start_year)*365*24:,sitenum]=waterlevels
+        # print(synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum],len(waterlevel_files))
+        # Use Etienne's spreadsheet if water level missing from L2 data
+        elif (synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]) in obs_waterlevel and obs_waterlevel[(synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum])].any():
+            waterlevels=obs_waterlevel[synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]].resample('1h').mean()[f'{start_year:d}-01-01':f'{end_year:d}-12-31']
+            waterlevels=waterlevels[~((waterlevels.index.month==2)&(waterlevels.index.day==29))]
+            start_ind=(waterlevels.index[0].year-start_year)*365*24+waterlevels.index[0].dayofyear-1
+            end_ind=len(waterlevels)+start_ind
+            tide_data_multicell['tide_height'][start_ind:end_ind,sitenum]=waterlevels
+            # tide_data_multicell['tide_salinity'][t_inds,sitenum]=obs_salinity[synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum]]
+        # Otherwise fill with adjacent zone
         elif synoptic['zone_id'][sitenum]=='UP' and (synoptic['site_id'][sitenum],'TR') in obs_waterlevel:
-            dt=obs_waterlevel[synoptic['site_id'][sitenum],'TR'].index-plt.matplotlib.dates.datetime.datetime(2022,1,1)
-            tide_data_multicell['tide_height'][t_inds,sitenum]=obs_waterlevel[synoptic['site_id'][sitenum],'TR']-(elevations['elev'][sitenum]-elevations['elev'][sitenum-1])
-            tide_data_multicell['tide_salinity'][t_inds,sitenum]=obs_salinity[synoptic['site_id'][sitenum],'TR']
+            # dt=obs_waterlevel[synoptic['site_id'][sitenum],'TR'].index-plt.matplotlib.dates.datetime.datetime(2022,1,1)
+            # tide_data_multicell['tide_height'][t_inds,sitenum]=obs_waterlevel[synoptic['site_id'][sitenum],'TR']-(elevations['elev'][sitenum]-elevations['elev'][sitenum-1])
+            # tide_data_multicell['tide_salinity'][t_inds,sitenum]=obs_salinity[synoptic['site_id'][sitenum],'TR']
+            waterlevels=obs_waterlevel[synoptic['site_id'][sitenum],'TR'][f'{start_year:d}-01-01':f'{end_year:d}-12-31']
+            waterlevels=waterlevels[~((waterlevels.index.month==2)&(waterlevels.index.day==29))]
+            start_ind=(waterlevels.index[0].year-start_year)*365*24+waterlevels.index[0].dayofyear-1
+            end_ind=len(waterlevels)+start_ind
+            tide_data_multicell['tide_height'][start_ind:end_ind,sitenum]=waterlevels
             print(f'{(synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum])} not in obs_waterlevel. Using adjusted TR water level')
         else:
             print(f'{(synoptic['site_id'][sitenum],synoptic['zone_id'][sitenum])} not in obs_waterlevel')
             continue
+
+        salinity_files=sorted(glob.glob(f'../../Data/L2 data/v2-0/{synoptic['site_id'][sitenum]:s}_????/{synoptic['site_id'][sitenum]:s}_{synoptic['zone_id'][sitenum]:s}_????_gw-salinity_L2_v2-0.parquet'))
+        if len(salinity_files)>0:
+            salinities=pd.concat([pd.read_parquet(f).set_index('TIMESTAMP')['Value_GF_MAC'].resample('1h').mean() for f in salinity_files])[f'{start_year:d}-01-01':f'{end_year:d}-12-31']
+            salinities=salinities[~((salinities.index.month==2)&(salinities.index.day==29))]
+            tide_data_multicell['tide_salinity'][(salinities.index[0].year-start_year)*365*24:,sitenum]=salinities
 
     # Remove unrealistic salinity (only occurs in PTR)
     tide_data_multicell['tide_salinity']=tide_data_multicell['tide_salinity'].where((tide_data_multicell['tide_salinity']<=32)&(tide_data_multicell['tide_salinity']>0.002))
@@ -66,12 +91,14 @@ if __name__ == '__main__':
     # Gap fill with interpolation
     # To do: Make a figure and stats for how much gap filling we did
     for sitenum in range(len(grid_points)):
-        start=tide_data_multicell['tide_height'].isel(gridcell=sitenum).dropna(dim='time')['time'][0].item()
-        end=tide_data_multicell['tide_height'].isel(gridcell=sitenum).dropna(dim='time')['time'][-1].item()
-        tide_data_multicell['tide_height'][start:end,sitenum] = tide_data_multicell['tide_height'][start:end,sitenum].interpolate_na(dim='time',max_gap=5000,method='spline')
-        start=tide_data_multicell['tide_salinity'].isel(gridcell=sitenum).dropna(dim='time')['time'][0].item()
-        end=tide_data_multicell['tide_salinity'].isel(gridcell=sitenum).dropna(dim='time')['time'][-1].item()
-        tide_data_multicell['tide_salinity'][start:end,sitenum] = tide_data_multicell['tide_salinity'][start:end,sitenum].interpolate_na(dim='time',max_gap=5000,method='spline')
+        if tide_data_multicell['tide_height'].isel(gridcell=sitenum).dropna(dim='time').any():
+            start=tide_data_multicell['tide_height'].isel(gridcell=sitenum).dropna(dim='time')['time'][0].item()
+            end=tide_data_multicell['tide_height'].isel(gridcell=sitenum).dropna(dim='time')['time'][-1].item()
+            tide_data_multicell['tide_height'][start:end,sitenum] = tide_data_multicell['tide_height'][start:end,sitenum].interpolate_na(dim='time',max_gap=1000,method='linear')
+        if tide_data_multicell['tide_salinity'].isel(gridcell=sitenum).dropna(dim='time').any():
+            start=tide_data_multicell['tide_salinity'].isel(gridcell=sitenum).dropna(dim='time')['time'][0].item()
+            end=tide_data_multicell['tide_salinity'].isel(gridcell=sitenum).dropna(dim='time')['time'][-1].item()
+            tide_data_multicell['tide_salinity'][start:end,sitenum] = tide_data_multicell['tide_salinity'][start:end,sitenum].interpolate_na(dim='time',max_gap=1000,method='linear')
 
         # Fill big gaps with next closest transect point?
         if synoptic['zone_id'][sitenum]=='W':
@@ -85,11 +112,13 @@ if __name__ == '__main__':
             tide_data_multicell['tide_height'][:,sitenum]=tide_data_multicell['tide_height'].isel(gridcell=sitenum).fillna(tide_data_multicell['tide_height'].isel(gridcell=sitenum-1)+(tide_data_multicell['tide_height'].isel(gridcell=sitenum).mean()-tide_data_multicell['tide_height'].isel(gridcell=sitenum-1).mean()))
 
     # Then with ensemble average
-    tide_data_multicell['tide_height']=tide_data_multicell['tide_height'].fillna(np.concat([tide_data_multicell['tide_height'].groupby(tide_data_multicell['time']%(365*24)).mean(skipna=True)]*5))
-    tide_data_multicell['tide_salinity']=tide_data_multicell['tide_salinity'].fillna(np.concat([tide_data_multicell['tide_salinity'].groupby(tide_data_multicell['time']%(365*24)).mean(skipna=True)]*5))
+    tide_data_multicell['tide_height']=tide_data_multicell['tide_height'].fillna(np.concat([tide_data_multicell['tide_height'].groupby(tide_data_multicell['time']%(365*24)).mean(skipna=True)]*(end_year-start_year+1)))
+    tide_data_multicell['tide_salinity']=tide_data_multicell['tide_salinity'].fillna(np.concat([tide_data_multicell['tide_salinity'].groupby(tide_data_multicell['time']%(365*24)).mean(skipna=True)]*(end_year-start_year+1)))
 
     # Still some nulls remaining in OWC salinity after all this
-    tide_data_multicell['tide_salinity'] = tide_data_multicell['tide_salinity'].interpolate_na(dim='time',max_gap=None,method='spline')
+    # OWC upland is missing from the data
+    tide_data_multicell['tide_salinity'][:,list(grid_points).index('OWC_UP')] = tide_data_multicell['tide_salinity'][:,list(grid_points).index('OWC_TR')]
+    # tide_data_multicell['tide_salinity'] = tide_data_multicell['tide_salinity'].interpolate_na(dim='time',max_gap=None,method='spline')
 
     f,a=plt.subplots(num='Forcing',nrows=2,ncols=7,clear=True)
     for sitenum in range(len(grid_points)):
@@ -240,6 +269,6 @@ if __name__ == '__main__':
     surfdata_multicell['mxsoil_color']=surfdata_multicell['mxsoil_color'][0]
     surfdata_multicell['mxsoil_order']=surfdata_multicell['mxsoil_order'][0]
 
-    tide_data_multicell.to_netcdf('COMPASS_hydro_BC_fromgw.nc')
+    tide_data_multicell.to_netcdf('COMPASS_hydro_BC_fromL2.nc')
     surfdata_multicell.to_netcdf('COMPASS_surfdata_fromgw.nc')
     domain_multicell.to_netcdf('COMPASS_domain_multicell_fromgw.nc')
